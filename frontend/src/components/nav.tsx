@@ -1,12 +1,13 @@
 import { getTranslations } from "next-intl/server";
+import Image from "next/image";
 
 import { Link } from "@/i18n/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NavUserMenu } from "@/components/nav-user-menu";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Wordmark } from "@/components/wordmark";
 import { getCurrentUser } from "@/lib/session";
+import icon from "@/app/[locale]/icon.png";
 
 export async function Nav() {
   const t = await getTranslations("Nav");
@@ -15,14 +16,11 @@ export async function Nav() {
   return (
     <header className="border-b">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-        <Link href="/">
+        <Link href="/" className="flex items-center gap-2">
+          <Image src={icon} alt="" className="size-7" />
           <Wordmark />
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          <Link href="/files" className="text-muted-foreground hover:text-foreground">
-            {t("files")}
-          </Link>
-          <Separator orientation="vertical" className="h-5" />
           <LanguageSwitcher />
           {user ? (
             <NavUserMenu user={user} />

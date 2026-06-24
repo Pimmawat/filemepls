@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { useRouter } from "@/i18n/navigation";
@@ -293,12 +294,14 @@ export function FileManager({
                 <TableCell>
                   <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button
-                      size="sm"
+                      size="icon-sm"
                       variant="ghost"
+                      title={t("downloadZip")}
+                      aria-label={t("downloadZip")}
                       nativeButton={false}
-                      render={<a href={api.folderDownloadZipUrl(folder.id)} />}
+                      render={<a href={api.folderDownloadZipUrl(folder.id)} download />}
                     >
-                      {t("downloadZip")}
+                      <Download />
                     </Button>
                     <CreateShareDialog target={{ type: "folder", id: folder.id }} />
                     <Button size="sm" variant="destructive" onClick={() => handleDeleteFolder(folder.id)}>
@@ -382,8 +385,15 @@ function FileRow({
       </TableCell>
       <TableCell>
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={onOpenDetails}>
-            {t("open")}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            title={t("download")}
+            aria-label={t("download")}
+            nativeButton={false}
+            render={<a href={api.downloadUrl(file.id)} download={file.name || undefined} />}
+          >
+            <Download />
           </Button>
           <CreateShareDialog target={{ type: "file", id: file.id }} />
           <Button size="sm" variant="destructive" onClick={onDelete}>
