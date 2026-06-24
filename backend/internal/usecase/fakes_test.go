@@ -347,6 +347,12 @@ func (r *fakeUserRepository) Save(_ context.Context, u *domain.User) error {
 	return nil
 }
 
+func (r *fakeUserRepository) Update(_ context.Context, u *domain.User) error {
+	clone := *u
+	r.byID[u.ID] = &clone
+	return nil
+}
+
 func (r *fakeUserRepository) FindByID(_ context.Context, id uuid.UUID) (*domain.User, error) {
 	u, ok := r.byID[id]
 	if !ok {

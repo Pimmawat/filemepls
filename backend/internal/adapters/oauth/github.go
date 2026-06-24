@@ -43,9 +43,10 @@ func (p *GitHubProvider) AuthorizeURL(state string) string {
 }
 
 type githubUser struct {
-	Login string `json:"login"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	AvatarURL string `json:"avatar_url"`
 }
 
 type githubEmail struct {
@@ -87,7 +88,7 @@ func (p *GitHubProvider) ExchangeCode(ctx context.Context, code string) (ports.P
 		displayName = user.Login
 	}
 
-	return ports.ProviderUserInfo{Email: email, DisplayName: displayName}, nil
+	return ports.ProviderUserInfo{Email: email, DisplayName: displayName, AvatarURL: user.AvatarURL}, nil
 }
 
 func (p *GitHubProvider) getJSON(ctx context.Context, accessToken, url string, dest any) error {

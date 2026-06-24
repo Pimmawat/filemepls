@@ -59,7 +59,7 @@ func (s *AuthService) HandleCallback(ctx context.Context, providerName, code str
 	user, err = s.users.FindByEmail(ctx, info.Email)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		user, err = domain.NewUser(info.Email, info.DisplayName, providerName)
+		user, err = domain.NewUser(info.Email, info.DisplayName, providerName, info.AvatarURL)
 		if err != nil {
 			return "", nil, err
 		}
@@ -68,6 +68,14 @@ func (s *AuthService) HandleCallback(ctx context.Context, providerName, code str
 		}
 	case err != nil:
 		return "", nil, fmt.Errorf("usecase: lookup user: %w", err)
+	default:
+		if user.DisplayName != info.DisplayName || user.AvatarURL != info.AvatarURL {
+			user.DisplayName = info.DisplayName
+			user.AvatarURL = info.AvatarURL
+			if err := s.users.Update(ctx, user); err != nil {
+				return "", nil, fmt.Errorf("usecase: update user: %w", err)
+			}
+		}
 	}
 
 	token, err = s.issueJWT(user.ID)

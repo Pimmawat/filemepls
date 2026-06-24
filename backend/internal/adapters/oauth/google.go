@@ -46,6 +46,7 @@ type googleUserInfo struct {
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	Name          string `json:"name"`
+	Picture       string `json:"picture"`
 }
 
 func (p *GoogleProvider) ExchangeCode(ctx context.Context, code string) (ports.ProviderUserInfo, error) {
@@ -78,5 +79,5 @@ func (p *GoogleProvider) ExchangeCode(ctx context.Context, code string) (ports.P
 		return ports.ProviderUserInfo{}, fmt.Errorf("oauth/google: no verified email available")
 	}
 
-	return ports.ProviderUserInfo{Email: info.Email, DisplayName: info.Name}, nil
+	return ports.ProviderUserInfo{Email: info.Email, DisplayName: info.Name, AvatarURL: info.Picture}, nil
 }

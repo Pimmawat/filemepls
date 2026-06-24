@@ -11,10 +11,11 @@ type User struct {
 	Email       string
 	DisplayName string
 	Provider    string // "github" | "google"
+	AvatarURL   string
 	CreatedAt   time.Time
 }
 
-func NewUser(email, displayName, provider string) (*User, error) {
+func NewUser(email, displayName, provider, avatarURL string) (*User, error) {
 	if email == "" {
 		return nil, ErrEmptyEmail
 	}
@@ -24,6 +25,7 @@ func NewUser(email, displayName, provider string) (*User, error) {
 		Email:       email,
 		DisplayName: displayName,
 		Provider:    provider,
+		AvatarURL:   avatarURL,
 		CreatedAt:   time.Now().UTC(),
 	}, nil
 }

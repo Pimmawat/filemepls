@@ -78,11 +78,12 @@ type userDTO struct {
 	Email       string    `json:"email"`
 	DisplayName string    `json:"displayName"`
 	Provider    string    `json:"provider"`
+	AvatarURL   string    `json:"avatarUrl"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
 func toUserDTO(u *domain.User) userDTO {
-	return userDTO{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Provider: u.Provider, CreatedAt: u.CreatedAt}
+	return userDTO{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Provider: u.Provider, AvatarURL: u.AvatarURL, CreatedAt: u.CreatedAt}
 }
 
 type shareLinkDTO struct {

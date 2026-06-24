@@ -67,7 +67,7 @@ func TestAuthService_HandleCallback_ReusesExistingUser(t *testing.T) {
 	provider := &fakeAuthProvider{name: "github", info: ports.ProviderUserInfo{Email: "existing@example.com", DisplayName: "Existing User"}}
 	svc, users := newTestAuthService(provider)
 
-	existing, err := domain.NewUser("existing@example.com", "Existing User", "github")
+	existing, err := domain.NewUser("existing@example.com", "Existing User", "github", "")
 	if err != nil {
 		t.Fatalf("NewUser() error: %v", err)
 	}

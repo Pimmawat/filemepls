@@ -14,4 +14,5 @@ type AuthProvider interface {
 type ProviderUserInfo struct {
 	Email       string
 	DisplayName string
+	AvatarURL   string
 }

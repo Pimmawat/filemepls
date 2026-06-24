@@ -76,6 +76,7 @@ export type User = {
   email: string;
   displayName: string;
   provider: string;
+  avatarUrl: string;
   createdAt: string;
 };
 

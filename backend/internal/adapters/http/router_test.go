@@ -214,6 +214,11 @@ func (r *memUserRepo) Save(_ context.Context, u *domain.User) error {
 	r.byID[u.ID] = &c
 	return nil
 }
+func (r *memUserRepo) Update(_ context.Context, u *domain.User) error {
+	c := *u
+	r.byID[u.ID] = &c
+	return nil
+}
 func (r *memUserRepo) FindByID(_ context.Context, id uuid.UUID) (*domain.User, error) {
 	u, ok := r.byID[id]
 	if !ok {

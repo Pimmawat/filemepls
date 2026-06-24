@@ -22,26 +22,34 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) Save(ctx context.Context, u *domain.User) error {
-	const q = `INSERT INTO users (id, email, display_name, provider, created_at) VALUES ($1, $2, $3, $4, $5)`
-	if _, err := r.pool.Exec(ctx, q, u.ID, u.Email, u.DisplayName, u.Provider, u.CreatedAt); err != nil {
+	const q = `INSERT INTO users (id, email, display_name, provider, avatar_url, created_at) VALUES ($1, $2, $3, $4, $5, $6)`
+	if _, err := r.pool.Exec(ctx, q, u.ID, u.Email, u.DisplayName, u.Provider, u.AvatarURL, u.CreatedAt); err != nil {
 		return fmt.Errorf("postgres: save user: %w", err)
 	}
 	return nil
 }
 
+func (r *UserRepository) Update(ctx context.Context, u *domain.User) error {
+	const q = `UPDATE users SET display_name = $2, avatar_url = $3 WHERE id = $1`
+	if _, err := r.pool.Exec(ctx, q, u.ID, u.DisplayName, u.AvatarURL); err != nil {
+		return fmt.Errorf("postgres: update user: %w", err)
+	}
+	return nil
+}
+
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
-	const q = `SELECT id, email, display_name, provider, created_at FROM users WHERE id = $1`
+	const q = `SELECT id, email, display_name, provider, avatar_url, created_at FROM users WHERE id = $1`
 	return scanUser(r.pool.QueryRow(ctx, q, id))
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
-	const q = `SELECT id, email, display_name, provider, created_at FROM users WHERE email = $1`
+	const q = `SELECT id, email, display_name, provider, avatar_url, created_at FROM users WHERE email = $1`
 	return scanUser(r.pool.QueryRow(ctx, q, email))
 }
 
 func scanUser(row rowScanner) (*domain.User, error) {
 	var u domain.User
-	if err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Provider, &u.CreatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Provider, &u.AvatarURL, &u.CreatedAt); err != nil {
 		return nil, mapErr(err)
 	}
 	return &u, nil
