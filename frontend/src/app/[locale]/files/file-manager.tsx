@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { Download } from "lucide-react";
+import { Download, Folder, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { useRouter } from "@/i18n/navigation";
@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+
+const UPLOAD_TOAST_ID = "upload-progress";
 import {
   Table,
   TableBody,
@@ -51,6 +53,18 @@ function formatSize(bytes: number): string {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} B/s`;
+  const units = ["KB/s", "MB/s", "GB/s"];
+  let value = bytesPerSec / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return `${value.toFixed(1)} ${units[i]}`;
+}
+
 export function FileManager({
   initialBrowse,
   folderId,
@@ -64,7 +78,6 @@ export function FileManager({
 
   const [browse, setBrowse] = useState(initialBrowse);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [detailsFileId, setDetailsFileId] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -77,23 +90,70 @@ export function FileManager({
   // read by whichever drop target receives the drop) — simpler than
   // plumbing it through dataTransfer for every intermediate component.
   const draggedItemRef = useRef<{ type: "file" | "folder"; id: string } | null>(null);
+  const lastProgressRef = useRef<{ time: number; loaded: number }>({ time: 0, loaded: 0 });
+
+  const renderUploadToast = useCallback(
+    (fileName: string, progress: number, speed: number) => {
+      toast.custom(
+        (toastId) => (
+          <div className="flex w-[356px] flex-col gap-2 rounded-lg border bg-popover p-4 text-popover-foreground shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="truncate text-sm font-medium">{fileName}</span>
+              <button
+                type="button"
+                className="ml-2 shrink-0 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  abortControllerRef.current?.abort();
+                  toast.dismiss(toastId);
+                }}
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <Progress value={progress} />
+            <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+              <span>{progress}%</span>
+              <span>{formatSpeed(speed)}</span>
+            </div>
+          </div>
+        ),
+        { id: UPLOAD_TOAST_ID, duration: Infinity },
+      );
+    },
+    [],
+  );
 
   async function uploadInto(file: File, parentId: string | null) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setUploading(true);
-    setUploadProgress(0);
+    lastProgressRef.current = { time: Date.now(), loaded: 0 };
+    let currentSpeed = 0;
+    renderUploadToast(file.name, 0, 0);
     try {
       const created = await api.uploadFile(
         file,
         parentId,
-        (loaded, total) => setUploadProgress(Math.round((loaded / total) * 100)),
+        (loaded, total) => {
+          const pct = Math.round((loaded / total) * 100);
+          const now = Date.now();
+          const prev = lastProgressRef.current;
+          const elapsed = (now - prev.time) / 1000;
+          if (elapsed >= 0.3) {
+            currentSpeed = (loaded - prev.loaded) / elapsed;
+            lastProgressRef.current = { time: now, loaded };
+          }
+          renderUploadToast(file.name, pct, currentSpeed);
+        },
         controller.signal,
       );
+      toast.dismiss(UPLOAD_TOAST_ID);
+      toast.success(t("uploadComplete"));
       if (parentId === folderId) {
         setBrowse((prev) => ({ ...prev, files: [created, ...prev.files] }));
       }
     } catch (err) {
+      toast.dismiss(UPLOAD_TOAST_ID);
       if (err instanceof UploadCancelledError) {
         toast(t("uploadCancelled"));
       } else {
@@ -246,17 +306,7 @@ export function FileManager({
         </div>
       )}
 
-      {uploading && (
-        <div className="flex items-center gap-3">
-          <Progress value={uploadProgress} className="flex-1" />
-          <span className="w-10 text-right text-sm text-muted-foreground tabular-nums">
-            {uploadProgress}%
-          </span>
-          <Button size="sm" variant="ghost" onClick={handleCancelUpload}>
-            {t("cancelUpload")}
-          </Button>
-        </div>
-      )}
+
 
       {browse.subfolders.length === 0 && browse.files.length === 0 ? (
         <p className="text-muted-foreground">{folderId ? t("emptyFolder") : t("empty")}</p>
@@ -285,7 +335,7 @@ export function FileManager({
                 className="cursor-pointer"
                 onClick={() => navigateTo(folder.id)}
               >
-                <TableCell className="max-w-xs truncate font-medium">📁 {folder.name}</TableCell>
+                <TableCell className="max-w-xs truncate font-medium"><Folder className="inline-block size-4 mr-1.5 -mt-0.5 text-muted-foreground" /> {folder.name}</TableCell>
                 <TableCell>—</TableCell>
                 <TableCell>—</TableCell>
                 <TableCell>
