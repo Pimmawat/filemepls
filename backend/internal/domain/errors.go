@@ -21,4 +21,5 @@ var (
 	ErrCyclicMove          = errors.New("domain: cannot move a folder into its own descendant")
 	ErrShareTargetRequired = errors.New("domain: share link must target exactly one of file or folder")
 	ErrShareTargetMismatch = errors.New("domain: share link does not target the expected resource type")
+	ErrAlreadyGranted      = errors.New("domain: user already has access to this resource")
 )

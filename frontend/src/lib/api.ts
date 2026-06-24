@@ -109,6 +109,30 @@ export type CreateShareLinkInput = {
   password?: string;
 };
 
+export type UserSummary = {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string;
+};
+
+export type AccessGrant = {
+  id: string;
+  targetType: "file" | "folder";
+  fileId: string | null;
+  folderId: string | null;
+  granteeId: string;
+  granteeEmail: string;
+  granteeName: string;
+  granteeAvatarUrl: string;
+  createdAt: string;
+};
+
+export type SharedWithMe = {
+  files: FileMeta[];
+  folders: FolderMeta[];
+};
+
 export const api = {
   me: (cookie?: string) =>
     apiFetch("/api/auth/me", { cookie }).then((r) => r.json() as Promise<User>),
@@ -254,4 +278,32 @@ export const api = {
   shareZipUrl: (token: string) => `${API_BASE_URL}/api/share/${token}/zip`,
   shareFolderFileDownloadUrl: (token: string, fileId: string) =>
     `${API_BASE_URL}/api/share/${token}/files/${fileId}/download`,
+
+  // Searches users by email substring for the "assign permission" picker.
+  // An empty query is never sent (the caller debounces/guards this).
+  searchUsers: (query: string) =>
+    apiFetch(`/api/users/search?q=${encodeURIComponent(query)}`).then(
+      (r) => r.json() as Promise<UserSummary[]>,
+    ),
+  grantFileAccess: (fileId: string, email: string) =>
+    apiFetch(`/api/files/${fileId}/permissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    }).then((r) => r.json() as Promise<AccessGrant>),
+  listFileGrants: (fileId: string) =>
+    apiFetch(`/api/files/${fileId}/permissions`).then((r) => r.json() as Promise<AccessGrant[]>),
+  grantFolderAccess: (folderId: string, email: string) =>
+    apiFetch(`/api/folders/${folderId}/permissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    }).then((r) => r.json() as Promise<AccessGrant>),
+  listFolderGrants: (folderId: string) =>
+    apiFetch(`/api/folders/${folderId}/permissions`).then(
+      (r) => r.json() as Promise<AccessGrant[]>,
+    ),
+  revokeGrant: (id: string) => apiFetch(`/api/permissions/${id}`, { method: "DELETE" }),
+  sharedWithMe: (cookie?: string) =>
+    apiFetch("/api/shared-with-me", { cookie }).then((r) => r.json() as Promise<SharedWithMe>),
 };

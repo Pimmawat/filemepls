@@ -96,8 +96,8 @@ func FolderZipHandler(folders *usecase.FolderService) gin.HandlerFunc {
 			return
 		}
 
-		ownerID := userIDFromContext(c)
-		folder, err := folders.PrepareZip(c.Request.Context(), ownerID, id)
+		userID := userIDFromContext(c)
+		folder, err := folders.PrepareZip(c.Request.Context(), userID, id)
 		if err != nil {
 			respondErr(c, err)
 			return
@@ -105,7 +105,7 @@ func FolderZipHandler(folders *usecase.FolderService) gin.HandlerFunc {
 
 		c.Header("Content-Disposition", contentDisposition(folder.Name+".zip", time.Now()))
 		c.Header("Content-Type", "application/zip")
-		if err := folders.StreamZip(c.Request.Context(), ownerID, folder.ID, c.Writer); err != nil {
+		if err := folders.StreamZip(c.Request.Context(), folder.OwnerID, folder.ID, c.Writer); err != nil {
 			log.Printf("folder zip stream error: %v", err)
 		}
 	}

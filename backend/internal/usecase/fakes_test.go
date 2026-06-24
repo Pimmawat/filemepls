@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -372,7 +373,129 @@ func (r *fakeUserRepository) FindByEmail(_ context.Context, email string) (*doma
 	return nil, domain.ErrNotFound
 }
 
+func (r *fakeUserRepository) SearchByEmail(_ context.Context, query string, excludeID uuid.UUID, limit int) ([]*domain.User, error) {
+	var out []*domain.User
+	for _, u := range r.byID {
+		if u.ID == excludeID {
+			continue
+		}
+		if strings.Contains(strings.ToLower(u.Email), strings.ToLower(query)) {
+			clone := *u
+			out = append(out, &clone)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 var _ ports.UserRepository = (*fakeUserRepository)(nil)
+
+// --- fakeAccessGrantRepository ---
+
+type fakeAccessGrantRepository struct {
+	byID    map[uuid.UUID]*domain.AccessGrant
+	files   *fakeFileRepository
+	folders *fakeFolderRepository
+}
+
+func newFakeAccessGrantRepository(files *fakeFileRepository, folders *fakeFolderRepository) *fakeAccessGrantRepository {
+	return &fakeAccessGrantRepository{byID: make(map[uuid.UUID]*domain.AccessGrant), files: files, folders: folders}
+}
+
+func (r *fakeAccessGrantRepository) Save(_ context.Context, g *domain.AccessGrant) error {
+	clone := *g
+	r.byID[g.ID] = &clone
+	return nil
+}
+
+func (r *fakeAccessGrantRepository) FindByID(_ context.Context, id uuid.UUID) (*domain.AccessGrant, error) {
+	g, ok := r.byID[id]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	clone := *g
+	return &clone, nil
+}
+
+func (r *fakeAccessGrantRepository) ListByFile(_ context.Context, fileID uuid.UUID) ([]*domain.AccessGrant, error) {
+	var out []*domain.AccessGrant
+	for _, g := range r.byID {
+		if g.FileID != nil && *g.FileID == fileID {
+			clone := *g
+			out = append(out, &clone)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeAccessGrantRepository) ListByFolder(_ context.Context, folderID uuid.UUID) ([]*domain.AccessGrant, error) {
+	var out []*domain.AccessGrant
+	for _, g := range r.byID {
+		if g.FolderID != nil && *g.FolderID == folderID {
+			clone := *g
+			out = append(out, &clone)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeAccessGrantRepository) Delete(_ context.Context, id uuid.UUID) error {
+	if _, ok := r.byID[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(r.byID, id)
+	return nil
+}
+
+func (r *fakeAccessGrantRepository) HasFileAccess(_ context.Context, fileID, granteeID uuid.UUID) (bool, error) {
+	for _, g := range r.byID {
+		if g.FileID != nil && *g.FileID == fileID && g.GranteeID == granteeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *fakeAccessGrantRepository) HasFolderAccess(_ context.Context, folderID, granteeID uuid.UUID) (bool, error) {
+	for _, g := range r.byID {
+		if g.FolderID != nil && *g.FolderID == folderID && g.GranteeID == granteeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *fakeAccessGrantRepository) ListSharedFiles(_ context.Context, granteeID uuid.UUID) ([]*domain.File, error) {
+	var out []*domain.File
+	for _, g := range r.byID {
+		if g.FileID == nil || g.GranteeID != granteeID {
+			continue
+		}
+		if f, ok := r.files.byID[*g.FileID]; ok {
+			clone := *f
+			out = append(out, &clone)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeAccessGrantRepository) ListSharedFolders(_ context.Context, granteeID uuid.UUID) ([]*domain.Folder, error) {
+	var out []*domain.Folder
+	for _, g := range r.byID {
+		if g.FolderID == nil || g.GranteeID != granteeID {
+			continue
+		}
+		if f, ok := r.folders.byID[*g.FolderID]; ok {
+			clone := *f
+			out = append(out, &clone)
+		}
+	}
+	return out, nil
+}
+
+var _ ports.AccessGrantRepository = (*fakeAccessGrantRepository)(nil)
 
 // --- fakePasswordHasher ---
 

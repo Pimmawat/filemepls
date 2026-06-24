@@ -25,11 +25,12 @@ type FolderService struct {
 	folders  ports.FolderRepository
 	fileRepo ports.FileRepository
 	files    *FileService // reused for blob-refcount-safe single-file deletion
+	grants   ports.AccessGrantRepository
 	storage  ports.StoragePort
 }
 
-func NewFolderService(folders ports.FolderRepository, fileRepo ports.FileRepository, files *FileService, storage ports.StoragePort) *FolderService {
-	return &FolderService{folders: folders, fileRepo: fileRepo, files: files, storage: storage}
+func NewFolderService(folders ports.FolderRepository, fileRepo ports.FileRepository, files *FileService, grants ports.AccessGrantRepository, storage ports.StoragePort) *FolderService {
+	return &FolderService{folders: folders, fileRepo: fileRepo, files: files, grants: grants, storage: storage}
 }
 
 // Create requires ownerID to own parentID (if non-nil).
@@ -54,19 +55,28 @@ func (s *FolderService) Create(ctx context.Context, ownerID uuid.UUID, name stri
 	return folder, nil
 }
 
-// Browse requires ownerID to own folderID (if non-nil; root is always
-// browsable by its owner).
-func (s *FolderService) Browse(ctx context.Context, ownerID uuid.UUID, folderID *uuid.UUID) (*BrowseResult, error) {
-	if folderID != nil {
-		folder, err := s.folders.FindByID(ctx, *folderID)
-		if err != nil {
-			return nil, err
-		}
-		if err := folder.EnsureOwnedBy(ownerID); err != nil {
-			return nil, err
-		}
+// Browse allows either the owner or a grantee (direct or via an ancestor
+// folder grant) to list folderID's contents (root, when folderID is nil,
+// is always the caller's own root). The listing itself is scoped by the
+// folder's actual owner (not the caller), since a grantee browses someone
+// else's hierarchy; the breadcrumb stops at the grant's root folder so a
+// grantee can never see folder names above what they were granted.
+func (s *FolderService) Browse(ctx context.Context, userID uuid.UUID, folderID *uuid.UUID) (*BrowseResult, error) {
+	if folderID == nil {
+		return browseFolder(ctx, s.folders, s.fileRepo, userID, nil, nil)
 	}
-	return browseFolder(ctx, s.folders, s.fileRepo, ownerID, folderID, nil)
+	folder, err := s.folders.FindByID(ctx, *folderID)
+	if err != nil {
+		return nil, err
+	}
+	ok, grantRoot, err := folderAccess(ctx, s.folders, s.grants, folder, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, domain.ErrNotOwner
+	}
+	return browseFolder(ctx, s.folders, s.fileRepo, folder.OwnerID, folderID, grantRoot)
 }
 
 // buildBreadcrumb walks the ancestor chain of folderID via repeated
@@ -243,17 +253,23 @@ func (s *FolderService) MoveFolder(ctx context.Context, ownerID, folderID uuid.U
 	return s.folders.UpdateParent(ctx, folderID, newParentID)
 }
 
-// PrepareZip requires ownerID to own folderID and returns it, without
-// streaming anything yet — split from StreamZip so the HTTP handler can
-// validate (and respond with a normal JSON error on failure) before
-// committing to a 200 response and writing any bytes.
-func (s *FolderService) PrepareZip(ctx context.Context, ownerID, folderID uuid.UUID) (*domain.Folder, error) {
+// PrepareZip allows either the owner or a grantee to read folderID and
+// returns it, without streaming anything yet — split from StreamZip so the
+// HTTP handler can validate (and respond with a normal JSON error on
+// failure) before committing to a 200 response and writing any bytes. The
+// returned folder's OwnerID (not necessarily userID) must be passed to
+// StreamZip, since the ZIP walk lists contents scoped by the actual owner.
+func (s *FolderService) PrepareZip(ctx context.Context, userID, folderID uuid.UUID) (*domain.Folder, error) {
 	folder, err := s.folders.FindByID(ctx, folderID)
 	if err != nil {
 		return nil, err
 	}
-	if err := folder.EnsureOwnedBy(ownerID); err != nil {
+	ok, _, err := folderAccess(ctx, s.folders, s.grants, folder, userID)
+	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, domain.ErrNotOwner
 	}
 	return folder, nil
 }

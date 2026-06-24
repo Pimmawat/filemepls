@@ -16,6 +16,7 @@ export default async function FolderPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) {
     redirect({ href: "/login", locale });
+    return;
   }
 
   const store = await cookies();
@@ -34,7 +35,7 @@ export default async function FolderPage({ params }: Props) {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
-      <FileManager initialBrowse={browse} folderId={folderId} />
+      <FileManager initialBrowse={browse} folderId={folderId} viewerId={user.id} />
     </main>
   );
 }

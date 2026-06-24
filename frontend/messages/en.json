@@ -1,6 +1,7 @@
 {
   "Nav": {
     "files": "My Files",
+    "sharedWithMe": "Shared with me",
     "login": "Log in",
     "logout": "Log out",
     "logoutFailed": "Could not log out"
@@ -38,6 +39,7 @@
     "deleteFailed": "Delete failed",
     "deleted": "File deleted",
     "uploadCancelled": "Upload cancelled",
+    "uploadComplete": "Upload complete",
     "cancelUpload": "Cancel",
     "createFolder": "New folder",
     "newFolderTitle": "New folder",
@@ -105,5 +107,24 @@
     "download": "Download",
     "close": "Close",
     "loadFailed": "Could not load file details"
+  },
+  "Permissions": {
+    "title": "Share with people",
+    "searchPlaceholder": "Search by email",
+    "searching": "Searching...",
+    "alreadyShared": "Already shared",
+    "loadingPeople": "Loading people...",
+    "noPeople": "Not shared with anyone yet.",
+    "granted": "Access granted",
+    "grantFailed": "Could not grant access",
+    "revoke": "Remove",
+    "revoked": "Access removed",
+    "revokeFailed": "Could not remove access",
+    "loadFailed": "Could not load people",
+    "close": "Close"
+  },
+  "SharedWithMe": {
+    "title": "Shared with me",
+    "empty": "Nothing has been shared with you yet."
   }
 }

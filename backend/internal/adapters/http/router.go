@@ -13,6 +13,7 @@ type Deps struct {
 	Files           *usecase.FileService
 	Folders         *usecase.FolderService
 	Shares          *usecase.ShareService
+	Permissions     *usecase.PermissionService
 	Auth            *usecase.AuthService
 	AllowedOrigins  []string
 	FrontendBaseURL string
@@ -44,6 +45,8 @@ func NewRouter(deps Deps) *gin.Engine {
 	filesGroup.PATCH("/:id/move", MoveFileHandler(deps.Folders))
 	filesGroup.POST("/:id/shares", CreateShareHandler(deps.Shares))
 	filesGroup.GET("/:id/shares", ListSharesHandler(deps.Shares))
+	filesGroup.POST("/:id/permissions", GrantFileAccessHandler(deps.Permissions))
+	filesGroup.GET("/:id/permissions", ListFileGrantsHandler(deps.Permissions))
 
 	foldersGroup := r.Group("/api/folders")
 	foldersGroup.Use(RequireAuth(deps.Auth))
@@ -54,8 +57,13 @@ func NewRouter(deps Deps) *gin.Engine {
 	foldersGroup.GET("/:id/download", FolderZipHandler(deps.Folders))
 	foldersGroup.POST("/:id/shares", CreateFolderShareHandler(deps.Shares))
 	foldersGroup.GET("/:id/shares", ListFolderSharesHandler(deps.Shares))
+	foldersGroup.POST("/:id/permissions", GrantFolderAccessHandler(deps.Permissions))
+	foldersGroup.GET("/:id/permissions", ListFolderGrantsHandler(deps.Permissions))
 
 	r.DELETE("/api/shares/:id", RequireAuth(deps.Auth), RevokeShareHandler(deps.Shares))
+	r.DELETE("/api/permissions/:id", RequireAuth(deps.Auth), RevokeGrantHandler(deps.Permissions))
+	r.GET("/api/users/search", RequireAuth(deps.Auth), SearchUsersHandler(deps.Permissions))
+	r.GET("/api/shared-with-me", RequireAuth(deps.Auth), SharedWithMeHandler(deps.Permissions))
 
 	r.GET("/api/share/:token", PublicShareInfoHandler(deps.Shares))
 	r.POST("/api/share/:token/browse", BrowsePublicFolderShareHandler(deps.Shares))

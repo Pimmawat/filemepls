@@ -236,6 +236,114 @@ func (r *memUserRepo) FindByEmail(_ context.Context, email string) (*domain.User
 	}
 	return nil, domain.ErrNotFound
 }
+func (r *memUserRepo) SearchByEmail(_ context.Context, query string, excludeID uuid.UUID, limit int) ([]*domain.User, error) {
+	var out []*domain.User
+	for _, u := range r.byID {
+		if u.ID == excludeID {
+			continue
+		}
+		if strings.Contains(strings.ToLower(u.Email), strings.ToLower(query)) {
+			c := *u
+			out = append(out, &c)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+type memAccessGrantRepo struct {
+	byID    map[uuid.UUID]*domain.AccessGrant
+	files   *memFileRepo
+	folders *memFolderRepo
+}
+
+func newMemAccessGrantRepo(files *memFileRepo, folders *memFolderRepo) *memAccessGrantRepo {
+	return &memAccessGrantRepo{byID: map[uuid.UUID]*domain.AccessGrant{}, files: files, folders: folders}
+}
+func (r *memAccessGrantRepo) Save(_ context.Context, g *domain.AccessGrant) error {
+	c := *g
+	r.byID[g.ID] = &c
+	return nil
+}
+func (r *memAccessGrantRepo) FindByID(_ context.Context, id uuid.UUID) (*domain.AccessGrant, error) {
+	g, ok := r.byID[id]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	c := *g
+	return &c, nil
+}
+func (r *memAccessGrantRepo) ListByFile(_ context.Context, fileID uuid.UUID) ([]*domain.AccessGrant, error) {
+	var out []*domain.AccessGrant
+	for _, g := range r.byID {
+		if g.FileID != nil && *g.FileID == fileID {
+			c := *g
+			out = append(out, &c)
+		}
+	}
+	return out, nil
+}
+func (r *memAccessGrantRepo) ListByFolder(_ context.Context, folderID uuid.UUID) ([]*domain.AccessGrant, error) {
+	var out []*domain.AccessGrant
+	for _, g := range r.byID {
+		if g.FolderID != nil && *g.FolderID == folderID {
+			c := *g
+			out = append(out, &c)
+		}
+	}
+	return out, nil
+}
+func (r *memAccessGrantRepo) Delete(_ context.Context, id uuid.UUID) error {
+	if _, ok := r.byID[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(r.byID, id)
+	return nil
+}
+func (r *memAccessGrantRepo) HasFileAccess(_ context.Context, fileID, granteeID uuid.UUID) (bool, error) {
+	for _, g := range r.byID {
+		if g.FileID != nil && *g.FileID == fileID && g.GranteeID == granteeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (r *memAccessGrantRepo) HasFolderAccess(_ context.Context, folderID, granteeID uuid.UUID) (bool, error) {
+	for _, g := range r.byID {
+		if g.FolderID != nil && *g.FolderID == folderID && g.GranteeID == granteeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (r *memAccessGrantRepo) ListSharedFiles(_ context.Context, granteeID uuid.UUID) ([]*domain.File, error) {
+	var out []*domain.File
+	for _, g := range r.byID {
+		if g.FileID == nil || g.GranteeID != granteeID {
+			continue
+		}
+		if f, ok := r.files.byID[*g.FileID]; ok {
+			c := *f
+			out = append(out, &c)
+		}
+	}
+	return out, nil
+}
+func (r *memAccessGrantRepo) ListSharedFolders(_ context.Context, granteeID uuid.UUID) ([]*domain.Folder, error) {
+	var out []*domain.Folder
+	for _, g := range r.byID {
+		if g.FolderID == nil || g.GranteeID != granteeID {
+			continue
+		}
+		if f, ok := r.folders.byID[*g.FolderID]; ok {
+			c := *f
+			out = append(out, &c)
+		}
+	}
+	return out, nil
+}
 
 type memShareRepo struct {
 	byID map[uuid.UUID]*domain.ShareLink
@@ -343,10 +451,12 @@ func newTestServer(t *testing.T) *testServer {
 	storage := newMemStorage()
 	users := newMemUserRepo()
 	shares := newMemShareRepo()
+	grants := newMemAccessGrantRepo(files, folders)
 
-	fileSvc := usecase.NewFileService(files, blobs, folders, storage, 1000, []string{"text/plain"})
-	folderSvc := usecase.NewFolderService(folders, files, fileSvc, storage)
+	fileSvc := usecase.NewFileService(files, blobs, folders, grants, storage, 1000, []string{"text/plain"})
+	folderSvc := usecase.NewFolderService(folders, files, fileSvc, grants, storage)
 	shareSvc := usecase.NewShareService(files, folders, shares, storage, memHasher{})
+	permissionSvc := usecase.NewPermissionService(files, folders, grants, users)
 
 	// The fake provider always "exchanges" to this fixed identity, so
 	// HandleCallback mints a real session JWT for a known user without an
@@ -359,6 +469,7 @@ func newTestServer(t *testing.T) *testServer {
 		Files:           fileSvc,
 		Folders:         folderSvc,
 		Shares:          shareSvc,
+		Permissions:     permissionSvc,
 		Auth:            authSvc,
 		AllowedOrigins:  []string{"http://localhost:3000"},
 		FrontendBaseURL: "http://localhost:3000",
@@ -450,11 +561,9 @@ func TestUploadListDownloadDelete(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "hello world" {
 		t.Fatalf("download status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	// Original filename + extension preserved, with a timestamp inserted
-	// before the extension (not appended after it, which would break the
-	// extension the OS uses to open the file).
-	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, `filename="test_`) || !strings.HasSuffix(cd, `.txt`) {
-		t.Errorf("Content-Disposition = %q, want a timestamped test_<ts>.txt filename", cd)
+	// Original filename preserved as-is in Content-Disposition.
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, `filename="test.txt"`) {
+		t.Errorf("Content-Disposition = %q, want original filename test.txt", cd)
 	}
 
 	rangeReq := httptest.NewRequest(http.MethodGet, "/api/files/"+created.ID.String()+"/download", nil)

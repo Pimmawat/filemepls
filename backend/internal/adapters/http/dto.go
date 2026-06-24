@@ -158,3 +158,65 @@ type createFolderRequest struct {
 type moveRequest struct {
 	ParentID *uuid.UUID `json:"parentId"`
 }
+
+type userSummaryDTO struct {
+	ID          uuid.UUID `json:"id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"displayName"`
+	AvatarURL   string    `json:"avatarUrl"`
+}
+
+func toUserSummaryDTO(u *domain.User) userSummaryDTO {
+	return userSummaryDTO{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, AvatarURL: u.AvatarURL}
+}
+
+func toUserSummaryDTOs(users []*domain.User) []userSummaryDTO {
+	out := make([]userSummaryDTO, len(users))
+	for i, u := range users {
+		out[i] = toUserSummaryDTO(u)
+	}
+	return out
+}
+
+type accessGrantDTO struct {
+	ID               uuid.UUID  `json:"id"`
+	TargetType       string     `json:"targetType"`
+	FileID           *uuid.UUID `json:"fileId"`
+	FolderID         *uuid.UUID `json:"folderId"`
+	GranteeID        uuid.UUID  `json:"granteeId"`
+	GranteeEmail     string     `json:"granteeEmail"`
+	GranteeName      string     `json:"granteeName"`
+	GranteeAvatarURL string     `json:"granteeAvatarUrl"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+func toAccessGrantDTO(v usecase.AccessGrantView) accessGrantDTO {
+	return accessGrantDTO{
+		ID:               v.Grant.ID,
+		TargetType:       string(v.Grant.TargetType),
+		FileID:           v.Grant.FileID,
+		FolderID:         v.Grant.FolderID,
+		GranteeID:        v.Grant.GranteeID,
+		GranteeEmail:     v.Grantee.Email,
+		GranteeName:      v.Grantee.DisplayName,
+		GranteeAvatarURL: v.Grantee.AvatarURL,
+		CreatedAt:        v.Grant.CreatedAt,
+	}
+}
+
+func toAccessGrantDTOs(views []usecase.AccessGrantView) []accessGrantDTO {
+	out := make([]accessGrantDTO, len(views))
+	for i, v := range views {
+		out[i] = toAccessGrantDTO(v)
+	}
+	return out
+}
+
+type grantAccessRequest struct {
+	Email string `json:"email" binding:"required"`
+}
+
+type sharedWithMeDTO struct {
+	Files   []fileDTO   `json:"files"`
+	Folders []folderDTO `json:"folders"`
+}

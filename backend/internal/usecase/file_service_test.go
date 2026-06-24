@@ -17,7 +17,8 @@ func newTestFileService() (*FileService, *fakeFileRepository, *fakeBlobRepositor
 	blobs := newFakeBlobRepository()
 	folders := newFakeFolderRepository()
 	storage := newFakeStorage()
-	svc := NewFileService(files, blobs, folders, storage, 1000, []string{"text/plain"})
+	grants := newFakeAccessGrantRepository(files, folders)
+	svc := NewFileService(files, blobs, folders, grants, storage, 1000, []string{"text/plain"})
 	return svc, files, blobs, storage
 }
 
@@ -49,7 +50,8 @@ func TestFileService_Upload_UnlimitedSizeAndWildcardMime(t *testing.T) {
 	blobs := newFakeBlobRepository()
 	folders := newFakeFolderRepository()
 	storage := newFakeStorage()
-	svc := NewFileService(files, blobs, folders, storage, 0, []string{"*"}) // 0 = unlimited, "*" = any mime
+	grants := newFakeAccessGrantRepository(files, folders)
+	svc := NewFileService(files, blobs, folders, grants, storage, 0, []string{"*"}) // 0 = unlimited, "*" = any mime
 	owner := uuid.New()
 
 	big := strings.Repeat("a", 5000) // would exceed a maxSize of 1000

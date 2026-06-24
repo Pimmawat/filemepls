@@ -20,13 +20,14 @@ type FileService struct {
 	files        ports.FileRepository
 	blobs        ports.BlobRepository
 	folders      ports.FolderRepository
+	grants       ports.AccessGrantRepository
 	storage      ports.StoragePort
 	maxSize      int64
 	allowedMimes []string
 }
 
-func NewFileService(files ports.FileRepository, blobs ports.BlobRepository, folders ports.FolderRepository, storage ports.StoragePort, maxSize int64, allowedMimes []string) *FileService {
-	return &FileService{files: files, blobs: blobs, folders: folders, storage: storage, maxSize: maxSize, allowedMimes: allowedMimes}
+func NewFileService(files ports.FileRepository, blobs ports.BlobRepository, folders ports.FolderRepository, grants ports.AccessGrantRepository, storage ports.StoragePort, maxSize int64, allowedMimes []string) *FileService {
+	return &FileService{files: files, blobs: blobs, folders: folders, grants: grants, storage: storage, maxSize: maxSize, allowedMimes: allowedMimes}
 }
 
 // Upload streams body through a SHA-256 hash into a staging key (never
@@ -121,13 +122,19 @@ func (s *FileService) List(ctx context.Context, ownerID uuid.UUID) ([]*domain.Fi
 	return s.files.ListByOwner(ctx, ownerID)
 }
 
-func (s *FileService) GetMetadata(ctx context.Context, ownerID, fileID uuid.UUID) (*domain.File, error) {
+// GetMetadata allows either the owner or a grantee (direct or via an
+// ancestor folder grant) to read fileID's metadata.
+func (s *FileService) GetMetadata(ctx context.Context, userID, fileID uuid.UUID) (*domain.File, error) {
 	f, err := s.files.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, err
 	}
-	if err := f.EnsureOwnedBy(ownerID); err != nil {
+	ok, err := fileAccess(ctx, s.folders, s.grants, f, userID)
+	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, domain.ErrNotOwner
 	}
 	return f, nil
 }
@@ -168,15 +175,20 @@ func (s *FileService) Delete(ctx context.Context, ownerID, fileID uuid.UUID) err
 	return nil
 }
 
-// DownloadRange resolves ownership and streams the requested byte range
-// (or the whole file if rangeHeader is empty) from storage.
-func (s *FileService) DownloadRange(ctx context.Context, ownerID, fileID uuid.UUID, rangeHeader string) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime, name string, createdAt time.Time, err error) {
+// DownloadRange allows either the owner or a grantee to stream the
+// requested byte range (or the whole file if rangeHeader is empty) from
+// storage.
+func (s *FileService) DownloadRange(ctx context.Context, userID, fileID uuid.UUID, rangeHeader string) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime, name string, createdAt time.Time, err error) {
 	f, err := s.files.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, 0, 0, 0, false, "", "", time.Time{}, err
 	}
-	if err := f.EnsureOwnedBy(ownerID); err != nil {
+	ok, err := fileAccess(ctx, s.folders, s.grants, f, userID)
+	if err != nil {
 		return nil, 0, 0, 0, false, "", "", time.Time{}, err
+	}
+	if !ok {
+		return nil, 0, 0, 0, false, "", "", time.Time{}, domain.ErrNotOwner
 	}
 
 	off, length, isPartial, err := parseRange(rangeHeader, f.Size)

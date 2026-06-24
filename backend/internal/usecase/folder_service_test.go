@@ -19,8 +19,9 @@ func newTestFolderService() (*FolderService, *fakeFolderRepository, *fakeFileRep
 	files := newFakeFileRepository()
 	blobs := newFakeBlobRepository()
 	storage := newFakeStorage()
-	fileSvc := NewFileService(files, blobs, folders, storage, 0, []string{"*"})
-	folderSvc := NewFolderService(folders, files, fileSvc, storage)
+	grants := newFakeAccessGrantRepository(files, folders)
+	fileSvc := NewFileService(files, blobs, folders, grants, storage, 0, []string{"*"})
+	folderSvc := NewFolderService(folders, files, fileSvc, grants, storage)
 	return folderSvc, folders, files, blobs, storage
 }
 

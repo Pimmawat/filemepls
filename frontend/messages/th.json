@@ -1,6 +1,7 @@
 {
   "Nav": {
     "files": "ไฟล์ของฉัน",
+    "sharedWithMe": "แชร์กับฉัน",
     "login": "เข้าสู่ระบบ",
     "logout": "ออกจากระบบ",
     "logoutFailed": "ออกจากระบบไม่สำเร็จ"
@@ -38,6 +39,7 @@
     "deleteFailed": "ลบไม่สำเร็จ",
     "deleted": "ลบไฟล์แล้ว",
     "uploadCancelled": "ยกเลิกการอัปโหลดแล้ว",
+    "uploadComplete": "อัปโหลดสำเร็จ",
     "cancelUpload": "ยกเลิก",
     "createFolder": "สร้างโฟลเดอร์",
     "newFolderTitle": "สร้างโฟลเดอร์ใหม่",
@@ -105,5 +107,24 @@
     "download": "ดาวน์โหลด",
     "close": "ปิด",
     "loadFailed": "โหลดรายละเอียดไฟล์ไม่สำเร็จ"
+  },
+  "Permissions": {
+    "title": "แชร์ให้ผู้อื่น",
+    "searchPlaceholder": "ค้นหาด้วยอีเมล",
+    "searching": "กำลังค้นหา...",
+    "alreadyShared": "แชร์แล้ว",
+    "loadingPeople": "กำลังโหลดรายชื่อ...",
+    "noPeople": "ยังไม่ได้แชร์ให้ใคร",
+    "granted": "ให้สิทธิ์เข้าถึงแล้ว",
+    "grantFailed": "ให้สิทธิ์เข้าถึงไม่สำเร็จ",
+    "revoke": "นำออก",
+    "revoked": "นำสิทธิ์เข้าถึงออกแล้ว",
+    "revokeFailed": "นำสิทธิ์เข้าถึงออกไม่สำเร็จ",
+    "loadFailed": "โหลดรายชื่อไม่สำเร็จ",
+    "close": "ปิด"
+  },
+  "SharedWithMe": {
+    "title": "แชร์กับฉัน",
+    "empty": "ยังไม่มีใครแชร์อะไรให้คุณ"
   }
 }

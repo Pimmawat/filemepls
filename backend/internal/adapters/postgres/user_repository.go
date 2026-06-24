@@ -47,6 +47,33 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain
 	return scanUser(r.pool.QueryRow(ctx, q, email))
 }
 
+func (r *UserRepository) SearchByEmail(ctx context.Context, query string, excludeID uuid.UUID, limit int) ([]*domain.User, error) {
+	const q = `
+		SELECT id, email, display_name, provider, avatar_url, created_at
+		FROM users
+		WHERE email ILIKE '%' || $1 || '%' AND id != $2
+		ORDER BY email
+		LIMIT $3`
+	rows, err := r.pool.Query(ctx, q, query, excludeID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: search users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*domain.User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: search users: %w", err)
+	}
+	return users, nil
+}
+
 func scanUser(row rowScanner) (*domain.User, error) {
 	var u domain.User
 	if err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Provider, &u.AvatarURL, &u.CreatedAt); err != nil {

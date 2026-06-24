@@ -18,8 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-
-const UPLOAD_TOAST_ID = "upload-progress";
 import {
   Table,
   TableBody,
@@ -36,10 +34,12 @@ import {
   type FileMeta,
   type FolderMeta,
 } from "@/lib/api";
+import { AssignPermissionDialog } from "./assign-permission-dialog";
 import { CreateShareDialog } from "./create-share-dialog";
 import { FileDetailsDialog } from "./file-details-dialog";
 
 const DRAG_MIME = "application/x-filemepls-item";
+const UPLOAD_TOAST_ID = "upload-progress";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -68,15 +68,20 @@ function formatSpeed(bytesPerSec: number): string {
 export function FileManager({
   initialBrowse,
   folderId,
+  viewerId,
 }: {
   initialBrowse: BrowseResult;
   folderId: string | null;
+  viewerId: string;
 }) {
   const t = useTranslations("Files");
   const format = useFormatter();
   const router = useRouter();
 
   const [browse, setBrowse] = useState(initialBrowse);
+  // Browsing a folder shared by someone else (view-only): root is always
+  // the viewer's own, so it's only ever false once inside such a folder.
+  const isOwner = !browse.folder || browse.folder.ownerId === viewerId;
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [detailsFileId, setDetailsFileId] = useState<string | null>(null);
@@ -174,9 +179,8 @@ export function FileManager({
     e.target.value = "";
   }
 
-  function handleCancelUpload() {
-    abortControllerRef.current?.abort();
-  }
+
+
 
   async function handleDeleteFile(id: string) {
     try {
@@ -271,34 +275,40 @@ export function FileManager({
     <div
       className="flex flex-col gap-6"
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("Files")) {
+        if (isOwner && e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
           setDragOver(true);
         }
       }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={handlePageDrop}
+      onDrop={isOwner ? handlePageDrop : undefined}
     >
       <div className="flex items-center justify-between">
         <h1 className="text-2xl">{t("title")}</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
-            {t("createFolder")}
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={handleFileSelected}
-            disabled={uploading}
-          />
-          <Button disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-            {uploading ? t("uploading") : t("upload")}
-          </Button>
-        </div>
+        {isOwner && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
+              {t("createFolder")}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileSelected}
+              disabled={uploading}
+            />
+            <Button disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+              {uploading ? t("uploading") : t("upload")}
+            </Button>
+          </div>
+        )}
       </div>
 
-      <Breadcrumb items={browse.breadcrumb} basePath="/files" onDropOnSegment={moveDraggedItemTo} />
+      <Breadcrumb
+        items={browse.breadcrumb}
+        basePath="/files"
+        onDropOnSegment={isOwner ? moveDraggedItemTo : undefined}
+      />
 
       {dragOver && (
         <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-primary/50 bg-primary/5 py-8 text-sm text-muted-foreground">
@@ -325,13 +335,17 @@ export function FileManager({
             {browse.subfolders.map((folder) => (
               <TableRow
                 key={folder.id}
-                draggable
-                onDragStart={(e) => {
-                  draggedItemRef.current = { type: "folder", id: folder.id };
-                  e.dataTransfer.setData(DRAG_MIME, folder.id);
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleDropOnFolderRow(e, folder)}
+                draggable={isOwner}
+                onDragStart={
+                  isOwner
+                    ? (e) => {
+                        draggedItemRef.current = { type: "folder", id: folder.id };
+                        e.dataTransfer.setData(DRAG_MIME, folder.id);
+                      }
+                    : undefined
+                }
+                onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+                onDrop={isOwner ? (e) => handleDropOnFolderRow(e, folder) : undefined}
                 className="cursor-pointer"
                 onClick={() => navigateTo(folder.id)}
               >
@@ -353,10 +367,15 @@ export function FileManager({
                     >
                       <Download />
                     </Button>
-                    <CreateShareDialog target={{ type: "folder", id: folder.id }} />
-                    <Button size="sm" variant="destructive" onClick={() => handleDeleteFolder(folder.id)}>
-                      {t("delete")}
-                    </Button>
+                    {isOwner && (
+                      <>
+                        <CreateShareDialog target={{ type: "folder", id: folder.id }} />
+                        <AssignPermissionDialog target={{ type: "folder", id: folder.id }} />
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteFolder(folder.id)}>
+                          {t("delete")}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -365,11 +384,16 @@ export function FileManager({
               <FileRow
                 key={f.id}
                 file={f}
+                isOwner={isOwner}
                 onOpenDetails={() => setDetailsFileId(f.id)}
                 onDelete={() => handleDeleteFile(f.id)}
-                onDragStart={() => {
-                  draggedItemRef.current = { type: "file", id: f.id };
-                }}
+                onDragStart={
+                  isOwner
+                    ? () => {
+                        draggedItemRef.current = { type: "file", id: f.id };
+                      }
+                    : undefined
+                }
               />
             ))}
           </TableBody>
@@ -411,20 +435,22 @@ export function FileManager({
 
 function FileRow({
   file,
+  isOwner,
   onOpenDetails,
   onDelete,
   onDragStart,
 }: {
   file: FileMeta;
+  isOwner: boolean;
   onOpenDetails: () => void;
   onDelete: () => void;
-  onDragStart: () => void;
+  onDragStart?: () => void;
 }) {
   const t = useTranslations("Files");
   const format = useFormatter();
 
   return (
-    <TableRow draggable onDragStart={onDragStart}>
+    <TableRow draggable={isOwner} onDragStart={onDragStart}>
       <TableCell className="max-w-xs cursor-pointer truncate" title={file.name} onClick={onOpenDetails}>
         {file.name || <span className="font-mono text-xs text-muted-foreground">{file.hash.slice(0, 12)}</span>}
       </TableCell>
@@ -445,10 +471,15 @@ function FileRow({
           >
             <Download />
           </Button>
-          <CreateShareDialog target={{ type: "file", id: file.id }} />
-          <Button size="sm" variant="destructive" onClick={onDelete}>
-            {t("delete")}
-          </Button>
+          {isOwner && (
+            <>
+              <CreateShareDialog target={{ type: "file", id: file.id }} />
+              <AssignPermissionDialog target={{ type: "file", id: file.id }} />
+              <Button size="sm" variant="destructive" onClick={onDelete}>
+                {t("delete")}
+              </Button>
+            </>
+          )}
         </div>
       </TableCell>
     </TableRow>

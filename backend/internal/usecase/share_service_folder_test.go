@@ -21,8 +21,9 @@ func newTestShareServiceWithFolders() (*ShareService, *FolderService, *fakeFolde
 	blobs := newFakeBlobRepository()
 	folders := newFakeFolderRepository()
 	storage := newFakeStorage()
-	fileSvc := NewFileService(files, blobs, folders, storage, 0, []string{"*"})
-	folderSvc := NewFolderService(folders, files, fileSvc, storage)
+	grants := newFakeAccessGrantRepository(files, folders)
+	fileSvc := NewFileService(files, blobs, folders, grants, storage, 0, []string{"*"})
+	folderSvc := NewFolderService(folders, files, fileSvc, grants, storage)
 	shares := newFakeShareRepository()
 	shareSvc := NewShareService(files, folders, shares, storage, fakePasswordHasher{})
 	return shareSvc, folderSvc, folders, shares
