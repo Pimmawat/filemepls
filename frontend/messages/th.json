@@ -1,0 +1,109 @@
+{
+  "Nav": {
+    "files": "ไฟล์ของฉัน",
+    "login": "เข้าสู่ระบบ",
+    "logout": "ออกจากระบบ",
+    "logoutFailed": "ออกจากระบบไม่สำเร็จ"
+  },
+  "Home": {
+    "title": "เก็บไฟล์และแชร์ได้ในที่เดียว",
+    "subtitle": "อัปโหลด จัดการ และแชร์ไฟล์ของคุณอย่างปลอดภัย",
+    "cta": "เริ่มต้นใช้งาน"
+  },
+  "LanguageSwitcher": {
+    "label": "ภาษา",
+    "th": "ไทย",
+    "en": "English"
+  },
+  "Login": {
+    "title": "เข้าสู่ระบบ FileMePls",
+    "subtitle": "เลือกผู้ให้บริการเพื่อดำเนินการต่อ",
+    "continueWithGithub": "เข้าสู่ระบบด้วย GitHub",
+    "continueWithGoogle": "เข้าสู่ระบบด้วย Google"
+  },
+  "Files": {
+    "title": "ไฟล์ของฉัน",
+    "upload": "อัปโหลดไฟล์",
+    "uploading": "กำลังอัปโหลด...",
+    "empty": "ยังไม่มีไฟล์ อัปโหลดไฟล์แรกของคุณเพื่อเริ่มต้น",
+    "colName": "ชื่อ",
+    "colSize": "ขนาด",
+    "colType": "ประเภท",
+    "colCreated": "วันที่สร้าง",
+    "colActions": "การจัดการ",
+    "download": "ดาวน์โหลด",
+    "share": "แชร์",
+    "delete": "ลบ",
+    "uploadFailed": "อัปโหลดไม่สำเร็จ",
+    "deleteFailed": "ลบไม่สำเร็จ",
+    "deleted": "ลบไฟล์แล้ว",
+    "uploadCancelled": "ยกเลิกการอัปโหลดแล้ว",
+    "cancelUpload": "ยกเลิก",
+    "createFolder": "สร้างโฟลเดอร์",
+    "newFolderTitle": "สร้างโฟลเดอร์ใหม่",
+    "folderNamePlaceholder": "ชื่อโฟลเดอร์",
+    "folderCreateFailed": "สร้างโฟลเดอร์ไม่สำเร็จ",
+    "deleteFolderConfirm": "ลบโฟลเดอร์นี้พร้อมทุกอย่างข้างในใช่หรือไม่? ไม่สามารถย้อนกลับได้",
+    "folderDeleteFailed": "ลบโฟลเดอร์ไม่สำเร็จ",
+    "folderDeleted": "ลบโฟลเดอร์แล้ว",
+    "moveFailed": "ย้ายไม่สำเร็จ",
+    "moved": "ย้ายแล้ว",
+    "dropHereToUpload": "วางไฟล์ที่นี่เพื่ออัปโหลด",
+    "downloadZip": "ดาวน์โหลดเป็น ZIP",
+    "emptyFolder": "โฟลเดอร์นี้ยังไม่มีไฟล์",
+    "open": "เปิด",
+    "create": "สร้าง",
+    "cancel": "ยกเลิก"
+  },
+  "Share": {
+    "title": "ลิงก์แชร์",
+    "visibility": "การมองเห็น",
+    "visibilityPublic": "สาธารณะ",
+    "visibilityPrivate": "ส่วนตัว",
+    "visibilityUnlisted": "ไม่แสดงในรายการ",
+    "expiresAt": "วันหมดอายุ (ไม่บังคับ)",
+    "maxDownloads": "จำนวนดาวน์โหลดสูงสุด (ไม่บังคับ)",
+    "password": "รหัสผ่าน (ไม่บังคับ)",
+    "create": "สร้างลิงก์",
+    "cancel": "ยกเลิก",
+    "copy": "คัดลอกลิงก์",
+    "copied": "คัดลอกแล้ว!",
+    "revoke": "ยกเลิกลิงก์",
+    "createFailed": "สร้างลิงก์แชร์ไม่สำเร็จ",
+    "copyFailed": "คัดลอกลิงก์ไม่สำเร็จ",
+    "revoked": "ยกเลิกลิงก์แชร์แล้ว",
+    "revokeFailed": "ยกเลิกลิงก์แชร์ไม่สำเร็จ",
+    "loadingLinks": "กำลังโหลดลิงก์แชร์...",
+    "noLinks": "ยังไม่มีลิงก์แชร์สำหรับไฟล์นี้",
+    "loadFailed": "โหลดลิงก์แชร์ไม่สำเร็จ"
+  },
+  "SharePage": {
+    "readyTitle": "ไฟล์พร้อมให้ดาวน์โหลด",
+    "expiredTitle": "ลิงก์นี้หมดอายุแล้ว",
+    "limitReachedTitle": "ดาวน์โหลดครบจำนวนที่กำหนดแล้ว",
+    "notFoundTitle": "ไม่พบลิงก์นี้",
+    "needsPasswordTitle": "ไฟล์นี้มีการป้องกันด้วยรหัสผ่าน",
+    "passwordLabel": "รหัสผ่าน",
+    "downloadButton": "ดาวน์โหลด",
+    "wrongPasswordNote": "ถ้ารหัสผ่านไม่ถูกต้อง คุณจะเห็นข้อผิดพลาดหลังจากกดส่ง — กรุณากลับไปลองใหม่",
+    "folderReadyTitle": "โฟลเดอร์พร้อมให้เข้าดู",
+    "downloadZipButton": "ดาวน์โหลดเป็น ZIP",
+    "verifying": "กำลังตรวจสอบ...",
+    "wrongPassword": "รหัสผ่านไม่ถูกต้อง",
+    "emptySharedFolder": "โฟลเดอร์นี้ยังไม่มีไฟล์",
+    "enterPassword": "ใส่รหัสผ่าน"
+  },
+  "Breadcrumb": {
+    "home": "หน้าหลัก"
+  },
+  "FileDetails": {
+    "title": "รายละเอียดไฟล์",
+    "name": "ชื่อ",
+    "size": "ขนาด",
+    "type": "ประเภท",
+    "created": "วันที่สร้าง",
+    "download": "ดาวน์โหลด",
+    "close": "ปิด",
+    "loadFailed": "โหลดรายละเอียดไฟล์ไม่สำเร็จ"
+  }
+}

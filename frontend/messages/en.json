@@ -1,0 +1,109 @@
+{
+  "Nav": {
+    "files": "My Files",
+    "login": "Log in",
+    "logout": "Log out",
+    "logoutFailed": "Could not log out"
+  },
+  "Home": {
+    "title": "Store and share your files in one place",
+    "subtitle": "Upload, manage, and securely share your files",
+    "cta": "Get started"
+  },
+  "LanguageSwitcher": {
+    "label": "Language",
+    "th": "ไทย",
+    "en": "English"
+  },
+  "Login": {
+    "title": "Log in to FileMePls",
+    "subtitle": "Choose a provider to continue",
+    "continueWithGithub": "Continue with GitHub",
+    "continueWithGoogle": "Continue with Google"
+  },
+  "Files": {
+    "title": "My Files",
+    "upload": "Upload file",
+    "uploading": "Uploading...",
+    "empty": "No files yet. Upload your first file to get started.",
+    "colName": "Name",
+    "colSize": "Size",
+    "colType": "Type",
+    "colCreated": "Created",
+    "colActions": "Actions",
+    "download": "Download",
+    "share": "Share",
+    "delete": "Delete",
+    "uploadFailed": "Upload failed",
+    "deleteFailed": "Delete failed",
+    "deleted": "File deleted",
+    "uploadCancelled": "Upload cancelled",
+    "cancelUpload": "Cancel",
+    "createFolder": "New folder",
+    "newFolderTitle": "New folder",
+    "folderNamePlaceholder": "Folder name",
+    "folderCreateFailed": "Could not create folder",
+    "deleteFolderConfirm": "Delete this folder and everything inside it? This cannot be undone.",
+    "folderDeleteFailed": "Could not delete folder",
+    "folderDeleted": "Folder deleted",
+    "moveFailed": "Could not move item",
+    "moved": "Moved",
+    "dropHereToUpload": "Drop files here to upload",
+    "downloadZip": "Download as ZIP",
+    "emptyFolder": "This folder is empty.",
+    "open": "Open",
+    "create": "Create",
+    "cancel": "Cancel"
+  },
+  "Share": {
+    "title": "Share link",
+    "visibility": "Visibility",
+    "visibilityPublic": "Public",
+    "visibilityPrivate": "Private",
+    "visibilityUnlisted": "Unlisted",
+    "expiresAt": "Expires at (optional)",
+    "maxDownloads": "Max downloads (optional)",
+    "password": "Password (optional)",
+    "create": "Create link",
+    "cancel": "Cancel",
+    "copy": "Copy link",
+    "copied": "Copied!",
+    "revoke": "Revoke",
+    "createFailed": "Could not create share link",
+    "copyFailed": "Could not copy link",
+    "revoked": "Share link revoked",
+    "revokeFailed": "Could not revoke share link",
+    "loadingLinks": "Loading share links...",
+    "noLinks": "No share links yet for this file.",
+    "loadFailed": "Could not load share links"
+  },
+  "SharePage": {
+    "readyTitle": "File ready to download",
+    "expiredTitle": "This link has expired",
+    "limitReachedTitle": "Download limit reached",
+    "notFoundTitle": "Link not found",
+    "needsPasswordTitle": "This file is password protected",
+    "passwordLabel": "Password",
+    "downloadButton": "Download",
+    "wrongPasswordNote": "If the password is incorrect, you'll see an error after submitting — go back and try again.",
+    "folderReadyTitle": "Folder ready to browse",
+    "downloadZipButton": "Download as ZIP",
+    "verifying": "Verifying...",
+    "wrongPassword": "Incorrect password",
+    "emptySharedFolder": "This folder is empty.",
+    "enterPassword": "Enter password"
+  },
+  "Breadcrumb": {
+    "home": "Home"
+  },
+  "FileDetails": {
+    "title": "File details",
+    "name": "Name",
+    "size": "Size",
+    "type": "Type",
+    "created": "Created",
+    "download": "Download",
+    "close": "Close",
+    "loadFailed": "Could not load file details"
+  }
+}
