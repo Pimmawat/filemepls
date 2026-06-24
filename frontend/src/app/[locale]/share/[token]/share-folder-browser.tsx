@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
+import { Folder } from "lucide-react";
 import { toast } from "sonner";
 
 import { Breadcrumb } from "@/components/breadcrumb";
@@ -173,7 +174,7 @@ export function ShareFolderBrowser({
           <TableBody>
             {browse.subfolders.map((folder) => (
               <TableRow key={folder.id}>
-                <TableCell className="max-w-xs truncate font-medium">📁 {folder.name}</TableCell>
+                <TableCell className="max-w-xs truncate font-medium"><Folder className="inline-block size-4 mr-1.5 -mt-0.5 text-muted-foreground" /> {folder.name}</TableCell>
                 <TableCell>—</TableCell>
                 <TableCell>
                   {format.dateTime(new Date(folder.createdAt), { dateStyle: "short", timeStyle: "medium" })}
