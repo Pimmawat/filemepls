@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"log"
 	"os"
 	"strconv"
@@ -33,6 +34,8 @@ type config struct {
 }
 
 func loadConfig() config {
+	loadDotEnv(".env")
+
 	return config{
 		HTTPAddr:           envOr("HTTP_ADDR", ":8080"),
 		FrontendBaseURL:    envOr("FRONTEND_BASE_URL", "http://localhost:3000"),
@@ -59,6 +62,44 @@ func loadConfig() config {
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURI:  envOr("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/google/callback"),
+	}
+}
+
+// loadDotEnv reads KEY=VALUE pairs from path into the process environment,
+// skipping blank lines and lines starting with #. A real environment
+// variable already set always wins over the file (so e.g. an NSSM service's
+// AppEnvironmentExtra, or a Docker env_file, can still override it) — this
+// makes the file purely a fallback for local/manual runs. A missing file is
+// not an error, since in some setups (Docker, NSSM-with-AppEnvironmentExtra)
+// the environment is already fully populated without one.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 {
+			if (value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		_ = os.Setenv(key, value)
 	}
 }
 
