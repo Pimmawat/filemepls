@@ -38,23 +38,17 @@ func writeDownloadResponse(c *gin.Context, stream io.ReadCloser, offset, content
 }
 
 // contentDisposition builds an RFC 6266 Content-Disposition header value
-// that preserves the original uploaded filename and extension, with a
-// timestamp inserted before the extension (so the file opens correctly by
-// association and repeated downloads of the same file don't collide):
-// e.g. "vacation.jpg" -> "vacation_20260624153012.jpg". Falls back to a
-// generic name if the original filename is empty.
+// that preserves the original uploaded filename and extension so the file
+// opens correctly by association. Falls back to a generic name if the
+// original filename is empty.
 func contentDisposition(name string, createdAt time.Time) string {
 	name = sanitizeHeaderValue(filepath.Base(name))
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = "download"
 	}
 
-	ext := filepath.Ext(name)
-	base := strings.TrimSuffix(name, ext)
-	timestamped := fmt.Sprintf("%s_%s%s", base, createdAt.UTC().Format("20060102150405"), ext)
-
 	return fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`,
-		toASCIIFallback(timestamped), url.PathEscape(timestamped))
+		toASCIIFallback(name), url.PathEscape(name))
 }
 
 // sanitizeHeaderValue strips control characters (including CR/LF) and
