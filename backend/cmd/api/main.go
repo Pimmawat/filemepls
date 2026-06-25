@@ -69,6 +69,7 @@ func main() {
 		FrontendBaseURL: cfg.FrontendBaseURL,
 		DefaultLocale:   cfg.DefaultLocale,
 		JWTTTL:          cfg.JWTTTL,
+		CookieDomain:    cfg.CookieDomain,
 	})
 
 	srv := &http.Server{

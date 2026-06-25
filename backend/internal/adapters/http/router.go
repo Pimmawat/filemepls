@@ -19,9 +19,14 @@ type Deps struct {
 	FrontendBaseURL string
 	DefaultLocale   string
 	JWTTTL          time.Duration
+	// CookieDomain sets the session cookie's Domain attribute; empty means
+	// host-only (fine when frontend and backend share a host/port set).
+	CookieDomain string
 }
 
 func NewRouter(deps Deps) *gin.Engine {
+	//gin.SetMode(gin.ReleaseMode)
+
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(CORS(deps.AllowedOrigins))
@@ -31,8 +36,8 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	authGroup := r.Group("/api/auth")
 	authGroup.GET("/:provider/authorize", AuthorizeHandler(deps.Auth))
-	authGroup.GET("/:provider/callback", CallbackHandler(deps.Auth, deps.FrontendBaseURL, deps.DefaultLocale, deps.JWTTTL))
-	authGroup.POST("/logout", LogoutHandler())
+	authGroup.GET("/:provider/callback", CallbackHandler(deps.Auth, deps.FrontendBaseURL, deps.DefaultLocale, deps.JWTTTL, deps.CookieDomain))
+	authGroup.POST("/logout", LogoutHandler(deps.CookieDomain))
 	authGroup.GET("/me", RequireAuth(deps.Auth), MeHandler(deps.Auth))
 
 	filesGroup := r.Group("/api/files")

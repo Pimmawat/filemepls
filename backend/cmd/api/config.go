@@ -14,6 +14,12 @@ type config struct {
 	FrontendBaseURL    string
 	DefaultLocale      string
 	CORSAllowedOrigins []string
+	// CookieDomain sets the session cookie's Domain attribute. Leave empty
+	// for a single-host deployment (cookie defaults to host-only). Set to
+	// a shared parent domain (e.g. ".example.com") when the frontend and
+	// backend live on different subdomains, so the browser-set cookie is
+	// sent to both instead of being scoped to whichever one issued it.
+	CookieDomain string
 
 	DatabaseURL string
 
@@ -41,6 +47,7 @@ func loadConfig() config {
 		FrontendBaseURL:    envOr("FRONTEND_BASE_URL", "http://localhost:3000"),
 		DefaultLocale:      envOr("DEFAULT_LOCALE", "th"),
 		CORSAllowedOrigins: envCSVOr("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+		CookieDomain:       os.Getenv("COOKIE_DOMAIN"),
 
 		DatabaseURL: requireEnv("DATABASE_URL"),
 
