@@ -65,6 +65,32 @@ function formatSpeed(bytesPerSec: number): string {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
+type UploadItem = { file: File; parentId: string | null };
+
+// A directory's entries can come back across multiple readEntries() calls
+// (the spec caps each batch, ~100 in Chrome) — keep calling until it
+// returns an empty array.
+function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve, reject) => {
+    const all: FileSystemEntry[] = [];
+    const readBatch = () => {
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          resolve(all);
+        } else {
+          all.push(...batch);
+          readBatch();
+        }
+      }, reject);
+    };
+    readBatch();
+  });
+}
+
+function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+
 export function FileManager({
   initialBrowse,
   folderId,
@@ -130,59 +156,127 @@ export function FileManager({
     [],
   );
 
-  async function uploadFilesInto(files: File[], parentId: string | null) {
-    if (files.length === 0) return;
+  // Recursively walks dropped directory entries, recreating the folder
+  // structure server-side as it goes (so a nested file's parentId points at
+  // the right newly created folder) and flattens everything into a single
+  // upload queue.
+  async function collectEntries(
+    entries: FileSystemEntry[],
+    parentId: string | null,
+  ): Promise<UploadItem[]> {
+    const items: UploadItem[] = [];
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file = await readFileEntry(entry as FileSystemFileEntry);
+        items.push({ file, parentId });
+      } else if (entry.isDirectory) {
+        let created;
+        try {
+          created = await api.createFolder(entry.name, parentId);
+        } catch (err) {
+          toast.error(t("folderCreateFailed"), {
+            description: err instanceof ApiError ? err.message : undefined,
+          });
+          continue;
+        }
+        if (parentId === folderId) {
+          setBrowse((prev) => ({ ...prev, subfolders: [created, ...prev.subfolders] }));
+        }
+        const children = await readAllEntries((entry as FileSystemDirectoryEntry).createReader());
+        items.push(...(await collectEntries(children, created.id)));
+      }
+    }
+    return items;
+  }
+
+  // dataTransfer.items must be read synchronously (before any await) since
+  // some browsers invalidate it once the drop event handler returns; the
+  // FileSystemEntry objects it yields stay valid afterwards.
+  async function collectDroppedItems(
+    dataTransfer: DataTransfer,
+    parentId: string | null,
+  ): Promise<UploadItem[]> {
+    const entries = Array.from(dataTransfer.items)
+      .map((item) => item.webkitGetAsEntry?.())
+      .filter((entry): entry is FileSystemEntry => entry !== null);
+    if (entries.length === 0) {
+      // Fallback for browsers without the (de facto standard) entries API.
+      return Array.from(dataTransfer.files).map((file) => ({ file, parentId }));
+    }
+    return collectEntries(entries, parentId);
+  }
+
+  async function uploadItemsInto(items: UploadItem[]) {
+    if (items.length === 0) return;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setUploading(true);
-    const uploaded: FileMeta[] = [];
+    const matchingCurrentFolder: FileMeta[] = [];
     const failed: string[] = [];
+    let successCount = 0;
     let cancelled = false;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      lastProgressRef.current = { time: Date.now(), loaded: 0 };
-      let currentSpeed = 0;
-      renderUploadToast(file.name, 0, 0, i + 1, files.length);
+    // One progress bar for the whole batch instead of one per file: track
+    // bytes already finished plus the bytes loaded for whichever file is
+    // currently in flight, so the bar advances smoothly across files
+    // instead of resetting to 0% each time the next one starts.
+    const totalBytes = items.reduce((sum, item) => sum + item.file.size, 0);
+    let completedBytes = 0;
+    let currentSpeed = 0;
+    lastProgressRef.current = { time: Date.now(), loaded: 0 };
+
+    for (let i = 0; i < items.length; i++) {
+      const { file, parentId } = items[i];
+      renderUploadToast(
+        file.name,
+        totalBytes > 0 ? Math.round((completedBytes / totalBytes) * 100) : 0,
+        currentSpeed,
+        i + 1,
+        items.length,
+      );
       try {
         const created = await api.uploadFile(
           file,
           parentId,
-          (loaded, total) => {
-            const pct = Math.round((loaded / total) * 100);
+          (loaded) => {
+            const overallLoaded = completedBytes + loaded;
+            const pct = totalBytes > 0 ? Math.round((overallLoaded / totalBytes) * 100) : 0;
             const now = Date.now();
             const prev = lastProgressRef.current;
             const elapsed = (now - prev.time) / 1000;
             if (elapsed >= 0.3) {
-              currentSpeed = (loaded - prev.loaded) / elapsed;
-              lastProgressRef.current = { time: now, loaded };
+              currentSpeed = (overallLoaded - prev.loaded) / elapsed;
+              lastProgressRef.current = { time: now, loaded: overallLoaded };
             }
-            renderUploadToast(file.name, pct, currentSpeed, i + 1, files.length);
+            renderUploadToast(file.name, pct, currentSpeed, i + 1, items.length);
           },
           controller.signal,
         );
-        uploaded.push(created);
+        successCount++;
+        completedBytes += file.size;
+        if (parentId === folderId) matchingCurrentFolder.push(created);
       } catch (err) {
         if (err instanceof UploadCancelledError) {
           cancelled = true;
           break;
         }
         failed.push(file.name);
+        completedBytes += file.size;
       }
     }
 
     toast.dismiss(UPLOAD_TOAST_ID);
-    if (uploaded.length > 0 && parentId === folderId) {
-      setBrowse((prev) => ({ ...prev, files: [...uploaded, ...prev.files] }));
+    if (matchingCurrentFolder.length > 0) {
+      setBrowse((prev) => ({ ...prev, files: [...matchingCurrentFolder, ...prev.files] }));
     }
     if (cancelled) {
       toast(t("uploadCancelled"));
     } else {
-      if (uploaded.length > 0) {
+      if (successCount > 0) {
         toast.success(
-          uploaded.length === 1
+          successCount === 1
             ? t("uploadComplete")
-            : t("uploadCompleteMultiple", { count: uploaded.length }),
+            : t("uploadCompleteMultiple", { count: successCount }),
         );
       }
       if (failed.length > 0) {
@@ -197,7 +291,7 @@ export function FileManager({
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    await uploadFilesInto(files, folderId);
+    await uploadItemsInto(files.map((file) => ({ file, parentId: folderId })));
     e.target.value = "";
   }
 
@@ -269,23 +363,23 @@ export function FileManager({
     }
   }
 
-  function handleDropOnFolderRow(e: React.DragEvent, folder: FolderMeta) {
+  async function handleDropOnFolderRow(e: React.DragEvent, folder: FolderMeta) {
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer.types.includes("Files")) {
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) uploadFilesInto(files, folder.id);
+      const items = await collectDroppedItems(e.dataTransfer, folder.id);
+      if (items.length > 0) uploadItemsInto(items);
       return;
     }
     moveDraggedItemTo(folder.id);
   }
 
-  function handlePageDrop(e: React.DragEvent) {
+  async function handlePageDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
     if (e.dataTransfer.types.includes("Files")) {
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) uploadFilesInto(files, folderId);
+      const items = await collectDroppedItems(e.dataTransfer, folderId);
+      if (items.length > 0) uploadItemsInto(items);
     }
   }
 
