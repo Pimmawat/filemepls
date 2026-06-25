@@ -19,7 +19,7 @@ export default async function LoginPage() {
         <Button size="lg" nativeButton={false} render={<a href={api.authorizeUrl("github")} />}>
           {t("continueWithGithub")}
         </Button>
-        <Button size="lg" variant="outline" nativeButton={false} render={<a href={api.authorizeUrl("google")} />}>
+        <Button disabled={true} size="lg" variant="outline" nativeButton={false} render={<a href={api.authorizeUrl("google")} />}>
           {t("continueWithGoogle")}
         </Button>
       </div>
