@@ -40,6 +40,7 @@
     "deleted": "File deleted",
     "uploadCancelled": "Upload cancelled",
     "uploadComplete": "Upload complete",
+    "uploadCompleteMultiple": "{count} files uploaded",
     "cancelUpload": "Cancel",
     "createFolder": "New folder",
     "newFolderTitle": "New folder",

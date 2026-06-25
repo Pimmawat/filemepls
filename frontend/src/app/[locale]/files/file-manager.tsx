@@ -98,12 +98,14 @@ export function FileManager({
   const lastProgressRef = useRef<{ time: number; loaded: number }>({ time: 0, loaded: 0 });
 
   const renderUploadToast = useCallback(
-    (fileName: string, progress: number, speed: number) => {
+    (fileName: string, progress: number, speed: number, current: number, total: number) => {
       toast.custom(
         (toastId) => (
           <div className="flex w-[356px] flex-col gap-2 rounded-lg border bg-popover p-4 text-popover-foreground shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="truncate text-sm font-medium">{fileName}</span>
+              <span className="truncate text-sm font-medium">
+                {total > 1 ? `(${current}/${total}) ${fileName}` : fileName}
+              </span>
               <button
                 type="button"
                 className="ml-2 shrink-0 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
@@ -128,54 +130,74 @@ export function FileManager({
     [],
   );
 
-  async function uploadInto(file: File, parentId: string | null) {
+  async function uploadFilesInto(files: File[], parentId: string | null) {
+    if (files.length === 0) return;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setUploading(true);
-    lastProgressRef.current = { time: Date.now(), loaded: 0 };
-    let currentSpeed = 0;
-    renderUploadToast(file.name, 0, 0);
-    try {
-      const created = await api.uploadFile(
-        file,
-        parentId,
-        (loaded, total) => {
-          const pct = Math.round((loaded / total) * 100);
-          const now = Date.now();
-          const prev = lastProgressRef.current;
-          const elapsed = (now - prev.time) / 1000;
-          if (elapsed >= 0.3) {
-            currentSpeed = (loaded - prev.loaded) / elapsed;
-            lastProgressRef.current = { time: now, loaded };
-          }
-          renderUploadToast(file.name, pct, currentSpeed);
-        },
-        controller.signal,
-      );
-      toast.dismiss(UPLOAD_TOAST_ID);
-      toast.success(t("uploadComplete"));
-      if (parentId === folderId) {
-        setBrowse((prev) => ({ ...prev, files: [created, ...prev.files] }));
+    const uploaded: FileMeta[] = [];
+    const failed: string[] = [];
+    let cancelled = false;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      lastProgressRef.current = { time: Date.now(), loaded: 0 };
+      let currentSpeed = 0;
+      renderUploadToast(file.name, 0, 0, i + 1, files.length);
+      try {
+        const created = await api.uploadFile(
+          file,
+          parentId,
+          (loaded, total) => {
+            const pct = Math.round((loaded / total) * 100);
+            const now = Date.now();
+            const prev = lastProgressRef.current;
+            const elapsed = (now - prev.time) / 1000;
+            if (elapsed >= 0.3) {
+              currentSpeed = (loaded - prev.loaded) / elapsed;
+              lastProgressRef.current = { time: now, loaded };
+            }
+            renderUploadToast(file.name, pct, currentSpeed, i + 1, files.length);
+          },
+          controller.signal,
+        );
+        uploaded.push(created);
+      } catch (err) {
+        if (err instanceof UploadCancelledError) {
+          cancelled = true;
+          break;
+        }
+        failed.push(file.name);
       }
-    } catch (err) {
-      toast.dismiss(UPLOAD_TOAST_ID);
-      if (err instanceof UploadCancelledError) {
-        toast(t("uploadCancelled"));
-      } else {
-        toast.error(t("uploadFailed"), {
-          description: err instanceof ApiError ? err.message : undefined,
-        });
-      }
-    } finally {
-      setUploading(false);
-      abortControllerRef.current = null;
     }
+
+    toast.dismiss(UPLOAD_TOAST_ID);
+    if (uploaded.length > 0 && parentId === folderId) {
+      setBrowse((prev) => ({ ...prev, files: [...uploaded, ...prev.files] }));
+    }
+    if (cancelled) {
+      toast(t("uploadCancelled"));
+    } else {
+      if (uploaded.length > 0) {
+        toast.success(
+          uploaded.length === 1
+            ? t("uploadComplete")
+            : t("uploadCompleteMultiple", { count: uploaded.length }),
+        );
+      }
+      if (failed.length > 0) {
+        toast.error(t("uploadFailed"), { description: failed.join(", ") });
+      }
+    }
+
+    setUploading(false);
+    abortControllerRef.current = null;
   }
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await uploadInto(file, folderId);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    await uploadFilesInto(files, folderId);
     e.target.value = "";
   }
 
@@ -251,8 +273,8 @@ export function FileManager({
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer.types.includes("Files")) {
-      const file = e.dataTransfer.files[0];
-      if (file) uploadInto(file, folder.id);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) uploadFilesInto(files, folder.id);
       return;
     }
     moveDraggedItemTo(folder.id);
@@ -262,8 +284,8 @@ export function FileManager({
     e.preventDefault();
     setDragOver(false);
     if (e.dataTransfer.types.includes("Files")) {
-      const file = e.dataTransfer.files[0];
-      if (file) uploadInto(file, folderId);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) uploadFilesInto(files, folderId);
     }
   }
 
@@ -293,6 +315,7 @@ export function FileManager({
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               className="hidden"
               onChange={handleFileSelected}
               disabled={uploading}
