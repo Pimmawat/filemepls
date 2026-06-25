@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { Folder } from "lucide-react";
+import { Download, Folder } from "lucide-react";
 
 import { useRouter } from "@/i18n/navigation";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -13,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { type SharedWithMe } from "@/lib/api";
+import { api, type SharedWithMe } from "@/lib/api";
 import { FileDetailsDialog } from "../files/file-details-dialog";
 
 function formatSize(bytes: number): string {
@@ -51,6 +52,7 @@ export function SharedWithMeList({ initial }: { initial: SharedWithMe }) {
               <TableHead>{tFiles("colSize")}</TableHead>
               <TableHead>{tFiles("colType")}</TableHead>
               <TableHead>{tFiles("colCreated")}</TableHead>
+              <TableHead className="text-right">{tFiles("colActions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -71,6 +73,20 @@ export function SharedWithMeList({ initial }: { initial: SharedWithMe }) {
                     dateStyle: "short",
                     timeStyle: "medium",
                   })}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      title={tFiles("downloadZip")}
+                      aria-label={tFiles("downloadZip")}
+                      nativeButton={false}
+                      render={<a href={api.folderDownloadZipUrl(folder.id)} download />}
+                    >
+                      <Download />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -94,6 +110,20 @@ export function SharedWithMeList({ initial }: { initial: SharedWithMe }) {
                     dateStyle: "short",
                     timeStyle: "medium",
                   })}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      title={tFiles("download")}
+                      aria-label={tFiles("download")}
+                      nativeButton={false}
+                      render={<a href={api.downloadUrl(file.id)} download={file.name || undefined} />}
+                    >
+                      <Download />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

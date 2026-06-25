@@ -52,6 +52,9 @@ export function NavUserMenu({ user }: { user: User }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href="/files" />}>{t("files")}</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href="/shared-with-me" />}>
+          {t("sharedWithMe")}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>{t("logout")}</DropdownMenuItem>
       </DropdownMenuContent>
