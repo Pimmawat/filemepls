@@ -21,6 +21,9 @@ export async function Nav() {
           <Wordmark />
         </Link>
         <nav className="flex items-center gap-4 text-sm">
+          <Link href="/send" className="text-muted-foreground hover:text-foreground">
+            {t("send")}
+          </Link>
           <LanguageSwitcher />
           {user ? (
             <NavUserMenu user={user} />

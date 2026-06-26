@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
@@ -11,11 +12,15 @@ import { api, ApiError, type FileMeta } from "@/lib/api";
 
 // The actual download is a real <form method="POST"> (native streaming, no
 // JS buffering of the file). The risk that motivated this component: if
-// the password is wrong, that raw POST navigation lands the browser on a
-// bare JSON error response. So when a password is required, we first
-// verify it via a side-effect-free fetch — only once that succeeds do we
-// reveal/submit the real download form; a wrong password now surfaces as
-// a normal toast instead of a blank JSON page.
+// the password is wrong, or the link has since expired / hit its download
+// limit, that raw POST navigation lands the browser on a bare JSON error
+// response. So when a password is required, we first verify it via a
+// side-effect-free fetch — only once that succeeds do we reveal/submit the
+// real download form; a wrong password now surfaces as a normal toast
+// instead of a blank JSON page. We also re-check the link's redemption
+// state right before every submit (e.g. someone re-clicking Download after
+// the link's last allowed download already happened in another tab), for
+// the same reason.
 export function ShareFileDownload({
   token,
   file,
@@ -28,24 +33,46 @@ export function ShareFileDownload({
   requiresPassword: boolean;
 }) {
   const t = useTranslations("SharePage");
+  const router = useRouter();
   const [password, setPassword] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(!requiresPassword);
   const formRef = useRef<HTMLFormElement>(null);
 
+  // Returns false (and shows the right toast) if the link is now expired or
+  // has hit its download limit. Refreshes the server component too, so the
+  // page's own title falls back to the expired/limit-reached state instead
+  // of leaving a dead download button on screen.
+  async function isStillAvailable() {
+    let state;
+    try {
+      state = await api.getPublicShare(token);
+    } catch {
+      return true;
+    }
+    if (state.status === "expired" || state.status === "limit_reached") {
+      toast.error(state.status === "expired" ? t("expiredTitle") : t("limitReachedTitle"));
+      router.refresh();
+      return false;
+    }
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (verified) {
-      formRef.current?.submit();
+      if (await isStillAvailable()) formRef.current?.submit();
       return;
     }
     setVerifying(true);
     try {
       await api.verifySharePassword(token, password);
-      setVerified(true);
-      // Submit on the next tick so the now-verified form (with the
-      // password field) has re-rendered before .submit() is called.
-      setTimeout(() => formRef.current?.submit(), 0);
+      if (await isStillAvailable()) {
+        setVerified(true);
+        // Submit on the next tick so the now-verified form (with the
+        // password field) has re-rendered before .submit() is called.
+        setTimeout(() => formRef.current?.submit(), 0);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast.error(t("wrongPassword"));

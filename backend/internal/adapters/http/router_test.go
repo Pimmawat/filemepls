@@ -16,6 +16,7 @@ import (
 
 	"filemepls/internal/domain"
 	"filemepls/internal/ports"
+	"filemepls/internal/sendhub"
 	"filemepls/internal/usecase"
 )
 
@@ -471,6 +472,7 @@ func newTestServer(t *testing.T) *testServer {
 		Shares:          shareSvc,
 		Permissions:     permissionSvc,
 		Auth:            authSvc,
+		SendHub:         sendhub.New(),
 		AllowedOrigins:  []string{"http://localhost:3000"},
 		FrontendBaseURL: "http://localhost:3000",
 		DefaultLocale:   "en",

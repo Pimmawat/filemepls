@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"filemepls/internal/sendhub"
 	"filemepls/internal/usecase"
 )
 
@@ -15,6 +16,7 @@ type Deps struct {
 	Shares          *usecase.ShareService
 	Permissions     *usecase.PermissionService
 	Auth            *usecase.AuthService
+	SendHub         *sendhub.Hub
 	AllowedOrigins  []string
 	FrontendBaseURL string
 	DefaultLocale   string
@@ -78,6 +80,8 @@ func NewRouter(deps Deps) *gin.Engine {
 	r.POST("/api/share/:token/download", OptionalAuth(deps.Auth), PublicShareDownloadHandler(deps.Shares))
 	r.POST("/api/share/:token/zip", OptionalAuth(deps.Auth), PublicFolderZipHandler(deps.Shares))
 	r.POST("/api/share/:token/files/:fileId/download", OptionalAuth(deps.Auth), PublicFolderFileDownloadHandler(deps.Shares))
+
+	r.GET("/api/send/ws", SendWSHandler(deps.SendHub, deps.AllowedOrigins))
 
 	return r
 }

@@ -2,6 +2,7 @@
   "Nav": {
     "files": "ไฟล์ของฉัน",
     "sharedWithMe": "แชร์กับฉัน",
+    "send": "ส่งไฟล์",
     "login": "เข้าสู่ระบบ",
     "logout": "ออกจากระบบ",
     "logoutFailed": "ออกจากระบบไม่สำเร็จ"
@@ -42,6 +43,28 @@
     "registerFailed": "สมัครสมาชิกไม่สำเร็จ",
     "haveAccount": "มีบัญชีอยู่แล้ว?",
     "loginLink": "เข้าสู่ระบบ"
+  },
+  "Send": {
+    "title": "ส่งไฟล์",
+    "subtitle": "ส่งไฟล์ตรงไปยังอุปกรณ์อื่นในเครือข่ายนี้ ไม่ต้องอัปโหลด ไม่ต้องมีบัญชี",
+    "youAre": "คุณคือ:",
+    "nearbyDevices": "อุปกรณ์ใกล้เคียง",
+    "noDevices": "ยังไม่พบอุปกรณ์อื่นในเครือข่ายนี้ ลองเปิดหน้านี้บนอุปกรณ์อื่นที่อยู่เครือข่ายเดียวกัน",
+    "sendButton": "ส่ง",
+    "outgoingTitle": "กำลังส่ง",
+    "incomingTitle": "กำลังรับ",
+    "fromPeer": "จาก",
+    "toPeer": "ถึง",
+    "statusConnecting": "กำลังเชื่อมต่อ...",
+    "statusSending": "กำลังส่ง...",
+    "statusReceiving": "กำลังรับ...",
+    "statusDone": "เสร็จสิ้น",
+    "statusRejected": "ถูกปฏิเสธ",
+    "statusFailed": "ล้มเหลว",
+    "incomingRequestTitle": "มีไฟล์เข้ามา",
+    "incomingRequestBody": "{name} ต้องการส่งไฟล์ {file} ({size}) ให้คุณ",
+    "accept": "ยอมรับ",
+    "reject": "ปฏิเสธ"
   },
   "Files": {
     "title": "ไฟล์ของฉัน",

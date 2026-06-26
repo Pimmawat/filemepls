@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Link2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -124,8 +125,10 @@ export function CreateShareDialog({ target }: { target: Target }) {
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        {t("title")}
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon-sm" title={t("title")} aria-label={t("title")} />}
+      >
+        <Link2 />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

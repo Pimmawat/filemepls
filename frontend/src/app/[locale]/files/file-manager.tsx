@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { Download, Folder, X } from "lucide-react";
+import { Download, Folder, FolderPlus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { useRouter } from "@/i18n/navigation";
@@ -403,8 +403,14 @@ export function FileManager({
         <h1 className="text-2xl">{t("title")}</h1>
         {isOwner && (
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
-              {t("createFolder")}
+            <Button
+              variant="outline"
+              size="icon"
+              title={t("createFolder")}
+              aria-label={t("createFolder")}
+              onClick={() => setNewFolderOpen(true)}
+            >
+              <FolderPlus />
             </Button>
             <input
               ref={fileInputRef}
@@ -414,8 +420,14 @@ export function FileManager({
               onChange={handleFileSelected}
               disabled={uploading}
             />
-            <Button disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-              {uploading ? t("uploading") : t("upload")}
+            <Button
+              size="icon"
+              disabled={uploading}
+              title={uploading ? t("uploading") : t("upload")}
+              aria-label={uploading ? t("uploading") : t("upload")}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload />
             </Button>
           </div>
         )}
@@ -488,8 +500,14 @@ export function FileManager({
                       <>
                         <CreateShareDialog target={{ type: "folder", id: folder.id }} />
                         <AssignPermissionDialog target={{ type: "folder", id: folder.id }} />
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteFolder(folder.id)}>
-                          {t("delete")}
+                        <Button
+                          size="icon-sm"
+                          variant="destructive"
+                          title={t("delete")}
+                          aria-label={t("delete")}
+                          onClick={() => handleDeleteFolder(folder.id)}
+                        >
+                          <Trash2 />
                         </Button>
                       </>
                     )}
@@ -592,8 +610,14 @@ function FileRow({
             <>
               <CreateShareDialog target={{ type: "file", id: file.id }} />
               <AssignPermissionDialog target={{ type: "file", id: file.id }} />
-              <Button size="sm" variant="destructive" onClick={onDelete}>
-                {t("delete")}
+              <Button
+                size="icon-sm"
+                variant="destructive"
+                title={t("delete")}
+                aria-label={t("delete")}
+                onClick={onDelete}
+              >
+                <Trash2 />
               </Button>
             </>
           )}

@@ -1,6 +1,10 @@
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8008";
 
+// ws(s):// equivalent of API_BASE_URL, for the anonymous LAN-send signaling
+// socket — no cookie/credentials involved, so it doesn't go through apiFetch.
+export const SEND_WS_URL = `${API_BASE_URL.replace(/^http/, "ws")}/api/send/ws`;
+
 export class ApiError extends Error {
   constructor(
     public status: number,

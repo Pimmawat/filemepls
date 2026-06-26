@@ -15,6 +15,7 @@ import (
 	"filemepls/internal/adapters/oauth"
 	"filemepls/internal/adapters/postgres"
 	"filemepls/internal/ports"
+	"filemepls/internal/sendhub"
 	"filemepls/internal/usecase"
 )
 
@@ -58,6 +59,7 @@ func main() {
 	shareService := usecase.NewShareService(fileRepo, folderRepo, shareRepo, storage, hasher)
 	permissionService := usecase.NewPermissionService(fileRepo, folderRepo, accessGrantRepo, userRepo)
 	authService := usecase.NewAuthService(userRepo, authProviders, hasher, []byte(cfg.JWTSecret), cfg.JWTTTL)
+	sendHub := sendhub.New()
 
 	router := httpadapter.NewRouter(httpadapter.Deps{
 		Files:           fileService,
@@ -65,6 +67,7 @@ func main() {
 		Shares:          shareService,
 		Permissions:     permissionService,
 		Auth:            authService,
+		SendHub:         sendHub,
 		AllowedOrigins:  cfg.CORSAllowedOrigins,
 		FrontendBaseURL: cfg.FrontendBaseURL,
 		DefaultLocale:   cfg.DefaultLocale,

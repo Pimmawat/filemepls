@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -128,7 +129,11 @@ export function AssignPermissionDialog({ target }: { target: Target }) {
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>{t("title")}</DialogTrigger>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon-sm" title={t("title")} aria-label={t("title")} />}
+      >
+        <UserPlus />
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("title")}</DialogTitle>

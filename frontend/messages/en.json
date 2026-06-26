@@ -2,6 +2,7 @@
   "Nav": {
     "files": "My Files",
     "sharedWithMe": "Shared with me",
+    "send": "Send",
     "login": "Log in",
     "logout": "Log out",
     "logoutFailed": "Could not log out"
@@ -42,6 +43,28 @@
     "registerFailed": "Could not register",
     "haveAccount": "Already have an account?",
     "loginLink": "Log in"
+  },
+  "Send": {
+    "title": "Send",
+    "subtitle": "Send files directly to another device on this network — no upload, no account needed",
+    "youAre": "You are:",
+    "nearbyDevices": "Nearby devices",
+    "noDevices": "No other devices found on this network yet. Open this page on another device on the same network.",
+    "sendButton": "Send",
+    "outgoingTitle": "Sending",
+    "incomingTitle": "Receiving",
+    "fromPeer": "from",
+    "toPeer": "to",
+    "statusConnecting": "Connecting...",
+    "statusSending": "Sending...",
+    "statusReceiving": "Receiving...",
+    "statusDone": "Done",
+    "statusRejected": "Declined",
+    "statusFailed": "Failed",
+    "incomingRequestTitle": "Incoming file",
+    "incomingRequestBody": "{name} wants to send you {file} ({size})",
+    "accept": "Accept",
+    "reject": "Decline"
   },
   "Files": {
     "title": "My Files",
