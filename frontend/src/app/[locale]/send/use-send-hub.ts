@@ -8,13 +8,6 @@ import type { FileMeta, PeerInfo, SignalPayload } from "@/lib/send/protocol";
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
-// How long the sender waits for the receiver's "ack" after its local send
-// loop finishes, before giving up and reporting the transfer as failed.
-// Generous on purpose — on a slow/high-latency real network, draining the
-// last buffered chunks and the receiver assembling the Blob both take
-// real time, unlike on a zero-latency loopback test.
-const ACK_TIMEOUT_MS = 30_000;
-
 export type OutgoingTransfer = {
   peerId: string;
   peerName: string;
@@ -64,13 +57,6 @@ export function useSendHub(wsUrl: string) {
   const peerConnections = useRef(new Map<string, RTCPeerConnection>());
   const pendingCandidates = useRef(new Map<string, RTCIceCandidateInit[]>());
   const abortControllers = useRef(new Map<string, AbortController>());
-  const ackTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-
-  const clearAckTimer = useCallback((peerId: string) => {
-    const timer = ackTimers.current.get(peerId);
-    if (timer) clearTimeout(timer);
-    ackTimers.current.delete(peerId);
-  }, []);
 
   const patchOutgoing = useCallback((peerId: string, patch: Partial<OutgoingTransfer>) => {
     setOutgoing((prev) => {
@@ -82,17 +68,13 @@ export function useSendHub(wsUrl: string) {
     });
   }, []);
 
-  const closePeer = useCallback(
-    (peerId: string) => {
-      peerConnections.current.get(peerId)?.close();
-      peerConnections.current.delete(peerId);
-      pendingCandidates.current.delete(peerId);
-      abortControllers.current.get(peerId)?.abort();
-      abortControllers.current.delete(peerId);
-      clearAckTimer(peerId);
-    },
-    [clearAckTimer],
-  );
+  const closePeer = useCallback((peerId: string) => {
+    peerConnections.current.get(peerId)?.close();
+    peerConnections.current.delete(peerId);
+    pendingCandidates.current.delete(peerId);
+    abortControllers.current.get(peerId)?.abort();
+    abortControllers.current.delete(peerId);
+  }, []);
 
   const flushCandidates = useCallback((peerId: string, pc: RTCPeerConnection) => {
     const queued = pendingCandidates.current.get(peerId);
@@ -142,7 +124,6 @@ export function useSendHub(wsUrl: string) {
     const connections = peerConnections.current;
     const candidates = pendingCandidates.current;
     const controllers = abortControllers.current;
-    const timers = ackTimers.current;
     return () => {
       socket.close();
       connections.forEach((pc) => pc.close());
@@ -150,10 +131,8 @@ export function useSendHub(wsUrl: string) {
       candidates.clear();
       controllers.forEach((c) => c.abort());
       controllers.clear();
-      timers.forEach((timer) => clearTimeout(timer));
-      timers.clear();
     };
-  }, [wsUrl, closePeer, flushCandidates, patchOutgoing, clearAckTimer]);
+  }, [wsUrl, closePeer, flushCandidates, patchOutgoing]);
 
   const sendFile = useCallback(
     (peer: PeerInfo, file: File) => {
@@ -196,7 +175,6 @@ export function useSendHub(wsUrl: string) {
       // delivery). A zero-latency loopback test never surfaces this race.
       channel.onmessage = (msg) => {
         if (msg.data === "ack") {
-          clearAckTimer(peer.id);
           patchOutgoing(peer.id, { status: "done" });
           closePeer(peer.id);
         }
@@ -209,20 +187,14 @@ export function useSendHub(wsUrl: string) {
           file,
           (sentBytes) => patchOutgoing(peer.id, { sentBytes }),
           controller.signal,
-        )
-          .then(() => {
-            // Stay "sending" until the ack above arrives. Fall back to
-            // "failed" if it never does (peer gone, network died, etc).
-            const timer = setTimeout(() => {
-              patchOutgoing(peer.id, { status: "failed" });
-              closePeer(peer.id);
-            }, ACK_TIMEOUT_MS);
-            ackTimers.current.set(peer.id, timer);
-          })
-          .catch(() => {
-            patchOutgoing(peer.id, { status: "failed" });
-            closePeer(peer.id);
-          });
+        ).catch(() => {
+          patchOutgoing(peer.id, { status: "failed" });
+          closePeer(peer.id);
+        });
+        // No timeout on waiting for the ack above once the local send
+        // loop finishes — large files over a slow link can legitimately
+        // take a long time to actually land. pc.onconnectionstatechange
+        // above still catches a genuinely dead connection.
       };
 
       void pc
@@ -236,7 +208,7 @@ export function useSendHub(wsUrl: string) {
           });
         });
     },
-    [closePeer, patchOutgoing, clearAckTimer],
+    [closePeer, patchOutgoing],
   );
 
   const acceptIncoming = useCallback(
