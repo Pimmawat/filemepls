@@ -8,6 +8,13 @@ import type { FileMeta, PeerInfo, SignalPayload } from "@/lib/send/protocol";
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
+// How long the sender waits for the receiver's "ack" after its local send
+// loop finishes, before giving up and reporting the transfer as failed.
+// Generous on purpose — on a slow/high-latency real network, draining the
+// last buffered chunks and the receiver assembling the Blob both take
+// real time, unlike on a zero-latency loopback test.
+const ACK_TIMEOUT_MS = 30_000;
+
 export type OutgoingTransfer = {
   peerId: string;
   peerName: string;
@@ -57,6 +64,13 @@ export function useSendHub(wsUrl: string) {
   const peerConnections = useRef(new Map<string, RTCPeerConnection>());
   const pendingCandidates = useRef(new Map<string, RTCIceCandidateInit[]>());
   const abortControllers = useRef(new Map<string, AbortController>());
+  const ackTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const clearAckTimer = useCallback((peerId: string) => {
+    const timer = ackTimers.current.get(peerId);
+    if (timer) clearTimeout(timer);
+    ackTimers.current.delete(peerId);
+  }, []);
 
   const patchOutgoing = useCallback((peerId: string, patch: Partial<OutgoingTransfer>) => {
     setOutgoing((prev) => {
@@ -68,13 +82,17 @@ export function useSendHub(wsUrl: string) {
     });
   }, []);
 
-  const closePeer = useCallback((peerId: string) => {
-    peerConnections.current.get(peerId)?.close();
-    peerConnections.current.delete(peerId);
-    pendingCandidates.current.delete(peerId);
-    abortControllers.current.get(peerId)?.abort();
-    abortControllers.current.delete(peerId);
-  }, []);
+  const closePeer = useCallback(
+    (peerId: string) => {
+      peerConnections.current.get(peerId)?.close();
+      peerConnections.current.delete(peerId);
+      pendingCandidates.current.delete(peerId);
+      abortControllers.current.get(peerId)?.abort();
+      abortControllers.current.delete(peerId);
+      clearAckTimer(peerId);
+    },
+    [clearAckTimer],
+  );
 
   const flushCandidates = useCallback((peerId: string, pc: RTCPeerConnection) => {
     const queued = pendingCandidates.current.get(peerId);
@@ -124,6 +142,7 @@ export function useSendHub(wsUrl: string) {
     const connections = peerConnections.current;
     const candidates = pendingCandidates.current;
     const controllers = abortControllers.current;
+    const timers = ackTimers.current;
     return () => {
       socket.close();
       connections.forEach((pc) => pc.close());
@@ -131,8 +150,10 @@ export function useSendHub(wsUrl: string) {
       candidates.clear();
       controllers.forEach((c) => c.abort());
       controllers.clear();
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
     };
-  }, [wsUrl, closePeer, flushCandidates, patchOutgoing]);
+  }, [wsUrl, closePeer, flushCandidates, patchOutgoing, clearAckTimer]);
 
   const sendFile = useCallback(
     (peer: PeerInfo, file: File) => {
@@ -167,6 +188,20 @@ export function useSendHub(wsUrl: string) {
         return next;
       });
 
+      // The receiver sends "ack" back over this same channel once it's
+      // actually assembled the file — see acceptIncoming. Only then do we
+      // close pc; closing right after the local send loop finishes would
+      // risk dropping whatever's still buffered/in-flight on a real
+      // network (channel.send() only enqueues data, it doesn't confirm
+      // delivery). A zero-latency loopback test never surfaces this race.
+      channel.onmessage = (msg) => {
+        if (msg.data === "ack") {
+          clearAckTimer(peer.id);
+          patchOutgoing(peer.id, { status: "done" });
+          closePeer(peer.id);
+        }
+      };
+
       channel.onopen = () => {
         patchOutgoing(peer.id, { status: "sending" });
         sendFileOverChannel(
@@ -175,9 +210,19 @@ export function useSendHub(wsUrl: string) {
           (sentBytes) => patchOutgoing(peer.id, { sentBytes }),
           controller.signal,
         )
-          .then(() => patchOutgoing(peer.id, { status: "done" }))
-          .catch(() => patchOutgoing(peer.id, { status: "failed" }))
-          .finally(() => closePeer(peer.id));
+          .then(() => {
+            // Stay "sending" until the ack above arrives. Fall back to
+            // "failed" if it never does (peer gone, network died, etc).
+            const timer = setTimeout(() => {
+              patchOutgoing(peer.id, { status: "failed" });
+              closePeer(peer.id);
+            }, ACK_TIMEOUT_MS);
+            ackTimers.current.set(peer.id, timer);
+          })
+          .catch(() => {
+            patchOutgoing(peer.id, { status: "failed" });
+            closePeer(peer.id);
+          });
       };
 
       void pc
@@ -191,7 +236,7 @@ export function useSendHub(wsUrl: string) {
           });
         });
     },
-    [closePeer, patchOutgoing],
+    [closePeer, patchOutgoing, clearAckTimer],
   );
 
   const acceptIncoming = useCallback(
@@ -215,6 +260,7 @@ export function useSendHub(wsUrl: string) {
         status: "receiving",
       });
 
+      let incomingChannel: RTCDataChannel | null = null;
       const assembler = new ReceiveAssembler(
         (receivedBytes) =>
           setIncoming((prev) => (prev && prev.fromId === offer.fromId ? { ...prev, receivedBytes } : prev)),
@@ -224,11 +270,16 @@ export function useSendHub(wsUrl: string) {
             prev && prev.fromId === offer.fromId ? { ...prev, status: "done", blobUrl: url } : prev,
           );
           downloadBlob(url, offer.file.name);
+          // Tell the sender over the same channel that it's safe to close
+          // now — only after the file is actually fully assembled here,
+          // not just "all chunks sent". See sendFile's channel.onmessage.
+          incomingChannel?.send("ack");
           closePeer(offer.fromId);
         },
       );
 
       pc.ondatachannel = (e) => {
+        incomingChannel = e.channel;
         e.channel.onmessage = (msg) => assembler.feed(msg.data);
       };
 
