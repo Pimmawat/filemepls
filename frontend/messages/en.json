@@ -2,15 +2,9 @@
   "Nav": {
     "files": "My Files",
     "sharedWithMe": "Shared with me",
-    "send": "Send",
     "login": "Log in",
     "logout": "Log out",
     "logoutFailed": "Could not log out"
-  },
-  "Home": {
-    "title": "Store and share your files in one place",
-    "subtitle": "Upload, manage, and securely share your files",
-    "cta": "Get started"
   },
   "LanguageSwitcher": {
     "label": "Language",
