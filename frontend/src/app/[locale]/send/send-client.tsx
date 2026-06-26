@@ -4,9 +4,9 @@ import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Laptop2, Send as SendIcon } from "lucide-react";
 
-import { BasketballProgress } from "@/components/basketball-progress";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { SEND_WS_URL } from "@/lib/api";
 import { useSendHub, type IncomingOffer, type OutgoingTransfer } from "./use-send-hub";
 
@@ -102,7 +102,7 @@ export function SendClient() {
             <p className="mb-2 text-sm">
               {incoming.file.name} {t("fromPeer")} {incoming.fromName}
             </p>
-            <BasketballProgress value={(incoming.receivedBytes / incoming.file.size) * 100} />
+            <Progress value={(incoming.receivedBytes / incoming.file.size) * 100} />
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
               <span>{incoming.status === "done" ? t("statusDone") : t("statusReceiving")}</span>
               <span>{formatBytes(incoming.receivedBytes)} / {formatBytes(incoming.file.size)}</span>
@@ -160,7 +160,7 @@ function OutgoingTransferRow({
       <p className="mb-2 text-sm">
         {transfer.fileName} {t("toPeer")} {transfer.peerName}
       </p>
-      <BasketballProgress value={(transfer.sentBytes / transfer.fileSize) * 100} />
+      <Progress value={(transfer.sentBytes / transfer.fileSize) * 100} />
       <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
         <span>{statusLabel}</span>
         <span>{formatBytes(transfer.sentBytes)} / {formatBytes(transfer.fileSize)}</span>
