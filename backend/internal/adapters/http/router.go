@@ -37,6 +37,8 @@ func NewRouter(deps Deps) *gin.Engine {
 	authGroup := r.Group("/api/auth")
 	authGroup.GET("/:provider/authorize", AuthorizeHandler(deps.Auth))
 	authGroup.GET("/:provider/callback", CallbackHandler(deps.Auth, deps.FrontendBaseURL, deps.DefaultLocale, deps.JWTTTL, deps.CookieDomain))
+	authGroup.POST("/register", RegisterHandler(deps.Auth, deps.JWTTTL, deps.CookieDomain))
+	authGroup.POST("/login", LoginHandler(deps.Auth, deps.JWTTTL, deps.CookieDomain))
 	authGroup.POST("/logout", LogoutHandler(deps.CookieDomain))
 	authGroup.GET("/me", RequireAuth(deps.Auth), MeHandler(deps.Auth))
 
@@ -70,12 +72,12 @@ func NewRouter(deps Deps) *gin.Engine {
 	r.GET("/api/users/search", RequireAuth(deps.Auth), SearchUsersHandler(deps.Permissions))
 	r.GET("/api/shared-with-me", RequireAuth(deps.Auth), SharedWithMeHandler(deps.Permissions))
 
-	r.GET("/api/share/:token", PublicShareInfoHandler(deps.Shares))
-	r.POST("/api/share/:token/browse", BrowsePublicFolderShareHandler(deps.Shares))
-	r.POST("/api/share/:token/verify-password", VerifySharePasswordHandler(deps.Shares))
-	r.POST("/api/share/:token/download", PublicShareDownloadHandler(deps.Shares))
-	r.POST("/api/share/:token/zip", PublicFolderZipHandler(deps.Shares))
-	r.POST("/api/share/:token/files/:fileId/download", PublicFolderFileDownloadHandler(deps.Shares))
+	r.GET("/api/share/:token", OptionalAuth(deps.Auth), PublicShareInfoHandler(deps.Shares))
+	r.POST("/api/share/:token/browse", OptionalAuth(deps.Auth), BrowsePublicFolderShareHandler(deps.Shares))
+	r.POST("/api/share/:token/verify-password", OptionalAuth(deps.Auth), VerifySharePasswordHandler(deps.Shares))
+	r.POST("/api/share/:token/download", OptionalAuth(deps.Auth), PublicShareDownloadHandler(deps.Shares))
+	r.POST("/api/share/:token/zip", OptionalAuth(deps.Auth), PublicFolderZipHandler(deps.Shares))
+	r.POST("/api/share/:token/files/:fileId/download", OptionalAuth(deps.Auth), PublicFolderFileDownloadHandler(deps.Shares))
 
 	return r
 }

@@ -463,7 +463,7 @@ func newTestServer(t *testing.T) *testServer {
 	// actual OAuth round trip (per the plan's testing approach: the rest of
 	// the API is fully exercisable by minting a JWT this way).
 	provider := memAuthProvider{name: "github", info: ports.ProviderUserInfo{Email: "test@example.com", DisplayName: "Test User"}}
-	authSvc := usecase.NewAuthService(users, []ports.AuthProvider{provider}, []byte("test-secret"), time.Hour)
+	authSvc := usecase.NewAuthService(users, []ports.AuthProvider{provider}, memHasher{}, []byte("test-secret"), time.Hour)
 
 	router := NewRouter(Deps{
 		Files:           fileSvc,
@@ -600,6 +600,83 @@ func TestUpload_RequiresAuth(t *testing.T) {
 	}
 }
 
+func TestRegisterThenLoginThenAuthenticatedRequest(t *testing.T) {
+	ts := newTestServer(t)
+	ts.sessionCookie = "" // start anonymous; the fixture user from newTestServer isn't used here
+
+	registerReq := bytes.NewBufferString(`{"email":"newuser@example.com","password":"correct-password","displayName":"New User"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", registerReq)
+	req.Header.Set("Content-Type", "application/json")
+	rec := ts.do(t, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("register status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var registered userDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &registered); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+	if registered.Email != "newuser@example.com" {
+		t.Fatalf("registered.Email = %q", registered.Email)
+	}
+	sessionCookie := extractSessionCookie(t, rec)
+
+	// Registering again with the same email must fail.
+	dupReq := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(
+		`{"email":"newuser@example.com","password":"another-password","displayName":"Dup"}`))
+	dupReq.Header.Set("Content-Type", "application/json")
+	rec = ts.do(t, dupReq)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("duplicate register status = %d, want 409", rec.Code)
+	}
+
+	// The freshly registered session cookie must work on an authenticated route.
+	ts.sessionCookie = sessionCookie
+	rec = ts.do(t, httptest.NewRequest(http.MethodGet, "/api/auth/me", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("me status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	// Logging in fresh (no cookie at all) with the same credentials must
+	// also succeed and authenticate as the same user.
+	ts.sessionCookie = ""
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(
+		`{"email":"newuser@example.com","password":"correct-password"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	rec = ts.do(t, loginReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var loggedIn userDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &loggedIn); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+	if loggedIn.ID != registered.ID {
+		t.Fatalf("logged in as a different user: %v vs %v", loggedIn.ID, registered.ID)
+	}
+
+	// Wrong password must be rejected.
+	wrongReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(
+		`{"email":"newuser@example.com","password":"wrong-password"}`))
+	wrongReq.Header.Set("Content-Type", "application/json")
+	rec = ts.do(t, wrongReq)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong password login status = %d, want 401", rec.Code)
+	}
+}
+
+// extractSessionCookie pulls the filemepls_session cookie value out of a
+// response recorder's Set-Cookie headers.
+func extractSessionCookie(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionCookieName {
+			return c.Value
+		}
+	}
+	t.Fatal("no session cookie set in response")
+	return ""
+}
+
 func TestShareCreateAndPublicRedeem(t *testing.T) {
 	ts := newTestServer(t)
 
@@ -637,6 +714,59 @@ func TestShareCreateAndPublicRedeem(t *testing.T) {
 	rec = ts.do(t, httptest.NewRequest(http.MethodPost, "/api/share/"+share.Token+"/download", nil))
 	if rec.Code != http.StatusOK || rec.Body.String() != "share this" {
 		t.Fatalf("redeem status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+// TestShareCreateAndPublicRedeem_PrivateRequiresAuth verifies a
+// VisibilityPrivate share refuses an anonymous visitor, but allows any
+// logged-in user once a session cookie is presented.
+func TestShareCreateAndPublicRedeem_PrivateRequiresAuth(t *testing.T) {
+	ts := newTestServer(t)
+	ownerCookie := ts.sessionCookie
+
+	body, contentType := multipartUpload(t, "private contents", "text/plain")
+	req := httptest.NewRequest(http.MethodPost, "/api/files", body)
+	req.Header.Set("Content-Type", contentType)
+	rec := ts.do(t, req)
+	var created fileDTO
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	shareReq := bytes.NewBufferString(`{"visibility":"private"}`)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/files/"+created.ID.String()+"/shares", shareReq)
+	req2.Header.Set("Content-Type", "application/json")
+	rec = ts.do(t, req2)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create share status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var share shareLinkDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+
+	// Anonymous info request must report auth_required, not the file.
+	ts.sessionCookie = ""
+	rec = ts.do(t, httptest.NewRequest(http.MethodGet, "/api/share/"+share.Token, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public info status = %d", rec.Code)
+	}
+	var state publicShareStateResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &state)
+	if state.Status != "auth_required" {
+		t.Fatalf("state.Status = %q, want auth_required", state.Status)
+	}
+
+	// Anonymous download attempt must be rejected too (not just the info
+	// endpoint), since a visitor could otherwise skip straight to it.
+	rec = ts.do(t, httptest.NewRequest(http.MethodPost, "/api/share/"+share.Token+"/download", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous download status = %d, want 401", rec.Code)
+	}
+
+	// Any logged-in user (not just the owner) may redeem it once authenticated.
+	ts.sessionCookie = ownerCookie
+	rec = ts.do(t, httptest.NewRequest(http.MethodPost, "/api/share/"+share.Token+"/download", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "private contents" {
+		t.Fatalf("authenticated download status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
 

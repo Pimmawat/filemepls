@@ -134,14 +134,21 @@ func (s *ShareService) ListSharesForFolder(ctx context.Context, ownerID, folderI
 }
 
 // GetPublicShare resolves a token to its ShareLink plus its target (File
-// XOR Folder, matching share.TargetType) without granting download access
-// yet and without requiring auth. Surfaces domain.ErrShareExpired /
-// domain.ErrDownloadLimitHit from the pure domain checks so callers can
-// render the right state before a password attempt.
-func (s *ShareService) GetPublicShare(ctx context.Context, token string) (share *domain.ShareLink, file *domain.File, folder *domain.Folder, err error) {
+// XOR Folder, matching share.TargetType). requesterID is the caller's
+// authenticated user ID, or uuid.Nil for an anonymous visitor — a
+// VisibilityPrivate share refuses anonymous requesters with
+// domain.ErrAuthRequired before any other state is revealed. Otherwise
+// surfaces domain.ErrShareExpired / domain.ErrDownloadLimitHit from the pure
+// domain checks so callers can render the right state before a password
+// attempt.
+func (s *ShareService) GetPublicShare(ctx context.Context, token string, requesterID uuid.UUID) (share *domain.ShareLink, file *domain.File, folder *domain.Folder, err error) {
 	share, err = s.shares.FindByToken(ctx, token)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+
+	if share.Visibility == domain.VisibilityPrivate && requesterID == uuid.Nil {
+		return share, nil, nil, domain.ErrAuthRequired
 	}
 
 	if share.IsExpired(time.Now()) {
@@ -181,8 +188,8 @@ func (s *ShareService) verifySharePassword(share *domain.ShareLink, plainPasswor
 // by the frontend to pre-flight-check a password before triggering the real
 // download navigation, so a wrong password surfaces as an in-app error
 // instead of a raw-JSON page replacing the app.
-func (s *ShareService) VerifySharePassword(ctx context.Context, token, plainPassword string) error {
-	share, _, _, err := s.GetPublicShare(ctx, token)
+func (s *ShareService) VerifySharePassword(ctx context.Context, token, plainPassword string, requesterID uuid.UUID) error {
+	share, _, _, err := s.GetPublicShare(ctx, token, requesterID)
 	if err != nil {
 		return err
 	}
@@ -193,8 +200,8 @@ func (s *ShareService) VerifySharePassword(ctx context.Context, token, plainPass
 // race between GetPublicShare and the actual download), verifies the
 // password if required, records the download, and streams the requested
 // byte range from storage. Only valid for file-target shares.
-func (s *ShareService) RedeemShareDownload(ctx context.Context, token, plainPassword, rangeHeader string) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime string, file *domain.File, err error) {
-	share, f, _, err := s.GetPublicShare(ctx, token)
+func (s *ShareService) RedeemShareDownload(ctx context.Context, token, plainPassword, rangeHeader string, requesterID uuid.UUID) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime string, file *domain.File, err error) {
+	share, f, _, err := s.GetPublicShare(ctx, token, requesterID)
 	if err != nil {
 		return nil, 0, 0, 0, false, "", nil, err
 	}
@@ -240,8 +247,8 @@ func (s *ShareService) RedeemShareDownload(ctx context.Context, token, plainPass
 // per-file counterpart to PrepareFolderShareZip's whole-folder download.
 // Like RedeemShareDownload, validation (password, containment) happens
 // before the download is recorded or any bytes are read.
-func (s *ShareService) RedeemFolderFileDownload(ctx context.Context, token string, fileID uuid.UUID, plainPassword, rangeHeader string) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime string, file *domain.File, err error) {
-	share, _, folder, err := s.GetPublicShare(ctx, token)
+func (s *ShareService) RedeemFolderFileDownload(ctx context.Context, token string, fileID uuid.UUID, plainPassword, rangeHeader string, requesterID uuid.UUID) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime string, file *domain.File, err error) {
+	share, _, folder, err := s.GetPublicShare(ctx, token, requesterID)
 	if err != nil {
 		return nil, 0, 0, 0, false, "", nil, err
 	}
@@ -325,8 +332,8 @@ func isWithinShare(ctx context.Context, folders ports.FolderRepository, candidat
 // error) if subFolderID isn't actually within the shared subtree, so a
 // visitor can't tell the difference between "doesn't exist" and "exists
 // but isn't shared".
-func (s *ShareService) BrowsePublicFolder(ctx context.Context, token string, subFolderID *uuid.UUID) (*BrowseResult, error) {
-	share, _, folder, err := s.GetPublicShare(ctx, token)
+func (s *ShareService) BrowsePublicFolder(ctx context.Context, token string, subFolderID *uuid.UUID, requesterID uuid.UUID) (*BrowseResult, error) {
+	share, _, folder, err := s.GetPublicShare(ctx, token, requesterID)
 	if err != nil {
 		return nil, err
 	}
@@ -356,8 +363,8 @@ func (s *ShareService) BrowsePublicFolder(ctx context.Context, token string, sub
 // if anything fails rather than committing to a 200 response first. Only
 // valid for folder-target shares. Returns the resolved folder's owner, the
 // target folder ID to stream, and its display name (for Content-Disposition).
-func (s *ShareService) PrepareFolderShareZip(ctx context.Context, token, plainPassword string, subFolderID *uuid.UUID) (ownerID, folderID uuid.UUID, folderName string, err error) {
-	share, _, folder, err := s.GetPublicShare(ctx, token)
+func (s *ShareService) PrepareFolderShareZip(ctx context.Context, token, plainPassword string, subFolderID *uuid.UUID, requesterID uuid.UUID) (ownerID, folderID uuid.UUID, folderName string, err error) {
+	share, _, folder, err := s.GetPublicShare(ctx, token, requesterID)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, "", err
 	}

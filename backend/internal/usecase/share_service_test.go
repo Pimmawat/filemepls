@@ -71,7 +71,7 @@ func TestShareService_GetPublicShare_States(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		_, gotFile, _, err := svc.GetPublicShare(ctx, share.Token)
+		_, gotFile, _, err := svc.GetPublicShare(ctx, share.Token, uuid.Nil)
 		if err != nil {
 			t.Fatalf("GetPublicShare() error: %v", err)
 		}
@@ -86,7 +86,7 @@ func TestShareService_GetPublicShare_States(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		_, _, _, err = svc.GetPublicShare(ctx, share.Token)
+		_, _, _, err = svc.GetPublicShare(ctx, share.Token, uuid.Nil)
 		if !errors.Is(err, domain.ErrShareExpired) {
 			t.Errorf("got %v, want %v", err, domain.ErrShareExpired)
 		}
@@ -98,14 +98,14 @@ func TestShareService_GetPublicShare_States(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		_, _, _, err = svc.GetPublicShare(ctx, share.Token)
+		_, _, _, err = svc.GetPublicShare(ctx, share.Token, uuid.Nil)
 		if !errors.Is(err, domain.ErrDownloadLimitHit) {
 			t.Errorf("got %v, want %v", err, domain.ErrDownloadLimitHit)
 		}
 	})
 
 	t.Run("unknown token", func(t *testing.T) {
-		_, _, _, err := svc.GetPublicShare(ctx, "no-such-token")
+		_, _, _, err := svc.GetPublicShare(ctx, "no-such-token", uuid.Nil)
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("got %v, want %v", err, domain.ErrNotFound)
 		}
@@ -121,7 +121,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		stream, _, cl, total, _, _, gotFile, err := svc.RedeemShareDownload(ctx, share.Token, "", "")
+		stream, _, cl, total, _, _, gotFile, err := svc.RedeemShareDownload(ctx, share.Token, "", "", uuid.Nil)
 		if err != nil {
 			t.Fatalf("RedeemShareDownload() error: %v", err)
 		}
@@ -140,7 +140,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		_, _, _, _, _, _, _, err = svc.RedeemShareDownload(ctx, share.Token, "wrong", "")
+		_, _, _, _, _, _, _, err = svc.RedeemShareDownload(ctx, share.Token, "wrong", "", uuid.Nil)
 		if !errors.Is(err, domain.ErrInvalidPassword) {
 			t.Errorf("got %v, want %v", err, domain.ErrInvalidPassword)
 		}
@@ -151,7 +151,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		_, _, _, _, _, _, _, err = svc.RedeemShareDownload(ctx, share.Token, "", "")
+		_, _, _, _, _, _, _, err = svc.RedeemShareDownload(ctx, share.Token, "", "", uuid.Nil)
 		if !errors.Is(err, domain.ErrPasswordRequired) {
 			t.Errorf("got %v, want %v", err, domain.ErrPasswordRequired)
 		}
@@ -162,13 +162,13 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		stream, _, _, _, _, _, _, err := svc.RedeemShareDownload(ctx, share.Token, "secret", "")
+		stream, _, _, _, _, _, _, err := svc.RedeemShareDownload(ctx, share.Token, "secret", "", uuid.Nil)
 		if err != nil {
 			t.Fatalf("RedeemShareDownload() error: %v", err)
 		}
 		_ = stream.Close()
 
-		_, _, _, err = svc.GetPublicShare(ctx, share.Token)
+		_, _, _, err = svc.GetPublicShare(ctx, share.Token, uuid.Nil)
 		if err != nil {
 			t.Fatalf("GetPublicShare() after one download: unexpected error: %v", err)
 		}
@@ -180,13 +180,13 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
-		stream, _, _, _, _, _, _, err := svc.RedeemShareDownload(ctx, share.Token, "", "")
+		stream, _, _, _, _, _, _, err := svc.RedeemShareDownload(ctx, share.Token, "", "", uuid.Nil)
 		if err != nil {
 			t.Fatalf("first RedeemShareDownload() error: %v", err)
 		}
 		_ = stream.Close()
 
-		_, _, _, _, _, _, _, err = svc.RedeemShareDownload(ctx, share.Token, "", "")
+		_, _, _, _, _, _, _, err = svc.RedeemShareDownload(ctx, share.Token, "", "", uuid.Nil)
 		if !errors.Is(err, domain.ErrDownloadLimitHit) {
 			t.Errorf("second download: got %v, want %v", err, domain.ErrDownloadLimitHit)
 		}
@@ -209,7 +209,7 @@ func TestShareService_RevokeShareLink(t *testing.T) {
 	if err := svc.RevokeShareLink(ctx, owner, share.ID); err != nil {
 		t.Fatalf("RevokeShareLink() by owner: unexpected error: %v", err)
 	}
-	if _, _, _, err := svc.GetPublicShare(ctx, share.Token); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, _, err := svc.GetPublicShare(ctx, share.Token, uuid.Nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("expected revoked share to be gone, got %v", err)
 	}
 }

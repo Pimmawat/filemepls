@@ -86,6 +86,17 @@ func toUserDTO(u *domain.User) userDTO {
 	return userDTO{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Provider: u.Provider, AvatarURL: u.AvatarURL, CreatedAt: u.CreatedAt}
 }
 
+type registerRequest struct {
+	Email       string `json:"email" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	DisplayName string `json:"displayName" binding:"required"`
+}
+
+type loginRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 type shareLinkDTO struct {
 	ID            uuid.UUID  `json:"id"`
 	Token         string     `json:"token"`
@@ -144,7 +155,7 @@ type verifyPasswordRequest struct {
 }
 
 type publicShareStateResponse struct {
-	Status     string           `json:"status"` // "ok" | "expired" | "limit_reached" | "needs_password" | "not_found"
+	Status     string           `json:"status"` // "ok" | "expired" | "limit_reached" | "needs_password" | "auth_required" | "not_found"
 	TargetType string           `json:"targetType,omitempty"`
 	File       *fileDTO         `json:"file,omitempty"`
 	Folder     *browseResultDTO `json:"folder,omitempty"`

@@ -19,8 +19,29 @@
   "Login": {
     "title": "เข้าสู่ระบบ FileMePls",
     "subtitle": "เลือกผู้ให้บริการเพื่อดำเนินการต่อ",
+    "emailLabel": "อีเมล",
+    "passwordLabel": "รหัสผ่าน",
+    "loginButton": "เข้าสู่ระบบ",
+    "loggingIn": "กำลังเข้าสู่ระบบ...",
+    "loginFailed": "เข้าสู่ระบบไม่สำเร็จ",
+    "noAccount": "ยังไม่มีบัญชี?",
+    "registerLink": "สมัครสมาชิก",
+    "or": "หรือ",
     "continueWithGithub": "เข้าสู่ระบบด้วย GitHub",
     "continueWithGoogle": "เข้าสู่ระบบด้วย Google (ยังมีบั๊กอยู่น๊าาาาาาาาา)"
+  },
+  "Register": {
+    "title": "สร้างบัญชี FileMePls",
+    "subtitle": "สมัครสมาชิกด้วยอีเมลของคุณ",
+    "displayNameLabel": "ชื่อที่แสดง",
+    "emailLabel": "อีเมล",
+    "passwordLabel": "รหัสผ่าน",
+    "passwordTooShort": "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+    "registerButton": "สมัครสมาชิก",
+    "registering": "กำลังสมัครสมาชิก...",
+    "registerFailed": "สมัครสมาชิกไม่สำเร็จ",
+    "haveAccount": "มีบัญชีอยู่แล้ว?",
+    "loginLink": "เข้าสู่ระบบ"
   },
   "Files": {
     "title": "ไฟล์ของฉัน",
@@ -84,6 +105,7 @@
     "readyTitle": "ไฟล์พร้อมให้ดาวน์โหลด",
     "expiredTitle": "ลิงก์นี้หมดอายุแล้ว",
     "limitReachedTitle": "ดาวน์โหลดครบจำนวนที่กำหนดแล้ว",
+    "authRequiredTitle": "กรุณาเข้าสู่ระบบเพื่อดูลิงก์นี้",
     "notFoundTitle": "ไม่พบลิงก์นี้",
     "needsPasswordTitle": "ไฟล์นี้มีการป้องกันด้วยรหัสผ่าน",
     "passwordLabel": "รหัสผ่าน",

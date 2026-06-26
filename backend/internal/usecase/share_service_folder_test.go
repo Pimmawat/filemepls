@@ -71,7 +71,7 @@ func TestShareService_BrowsePublicFolder(t *testing.T) {
 	}
 
 	t.Run("share root, empty breadcrumb (scoped to share)", func(t *testing.T) {
-		result, err := shareSvc.BrowsePublicFolder(ctx, share.Token, nil)
+		result, err := shareSvc.BrowsePublicFolder(ctx, share.Token, nil, uuid.Nil)
 		if err != nil {
 			t.Fatalf("BrowsePublicFolder() error: %v", err)
 		}
@@ -87,7 +87,7 @@ func TestShareService_BrowsePublicFolder(t *testing.T) {
 	})
 
 	t.Run("descend into subfolder within share", func(t *testing.T) {
-		result, err := shareSvc.BrowsePublicFolder(ctx, share.Token, &sub.ID)
+		result, err := shareSvc.BrowsePublicFolder(ctx, share.Token, &sub.ID, uuid.Nil)
 		if err != nil {
 			t.Fatalf("BrowsePublicFolder() error: %v", err)
 		}
@@ -125,12 +125,12 @@ func TestShareService_BrowsePublicFolder_ContainmentCheck(t *testing.T) {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
 
-	if _, err := shareSvc.BrowsePublicFolder(ctx, share.Token, &secret.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := shareSvc.BrowsePublicFolder(ctx, share.Token, &secret.ID, uuid.Nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("got %v, want %v (must not reveal that secret exists, just like a missing folder)", err, domain.ErrNotFound)
 	}
 
 	// Also must not allow zip-downloading the unrelated folder.
-	if _, _, _, err := shareSvc.PrepareFolderShareZip(ctx, share.Token, "", &secret.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, _, err := shareSvc.PrepareFolderShareZip(ctx, share.Token, "", &secret.ID, uuid.Nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("zip: got %v, want %v", err, domain.ErrNotFound)
 	}
 }
@@ -149,10 +149,10 @@ func TestShareService_BrowsePublicFolder_PasswordGated(t *testing.T) {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
 
-	if err := shareSvc.VerifySharePassword(ctx, share.Token, "wrong"); !errors.Is(err, domain.ErrInvalidPassword) {
+	if err := shareSvc.VerifySharePassword(ctx, share.Token, "wrong", uuid.Nil); !errors.Is(err, domain.ErrInvalidPassword) {
 		t.Errorf("got %v, want %v", err, domain.ErrInvalidPassword)
 	}
-	if err := shareSvc.VerifySharePassword(ctx, share.Token, "secret"); err != nil {
+	if err := shareSvc.VerifySharePassword(ctx, share.Token, "secret", uuid.Nil); err != nil {
 		t.Errorf("unexpected error verifying correct password: %v", err)
 	}
 }
@@ -190,7 +190,7 @@ func TestShareService_RedeemFolderFileDownload(t *testing.T) {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
 
-	rc, _, _, _, _, mime, f, err := shareSvc.RedeemFolderFileDownload(ctx, share.Token, inside.ID, "", "")
+	rc, _, _, _, _, mime, f, err := shareSvc.RedeemFolderFileDownload(ctx, share.Token, inside.ID, "", "", uuid.Nil)
 	if err != nil {
 		t.Fatalf("RedeemFolderFileDownload() error: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestShareService_RedeemFolderFileDownload(t *testing.T) {
 
 	// A file outside the shared subtree must be unreachable, even though
 	// it belongs to the same owner.
-	if _, _, _, _, _, _, _, err := shareSvc.RedeemFolderFileDownload(ctx, share.Token, outsideFile.ID, "", ""); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, _, _, _, _, _, err := shareSvc.RedeemFolderFileDownload(ctx, share.Token, outsideFile.ID, "", "", uuid.Nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("got %v, want %v", err, domain.ErrNotFound)
 	}
 }
@@ -228,7 +228,7 @@ func TestShareService_RedeemFolderShareZip(t *testing.T) {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
 
-	ownerID, folderID, name, err := shareSvc.PrepareFolderShareZip(ctx, share.Token, "", nil)
+	ownerID, folderID, name, err := shareSvc.PrepareFolderShareZip(ctx, share.Token, "", nil, uuid.Nil)
 	if err != nil {
 		t.Fatalf("PrepareFolderShareZip() error: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestShareService_RedeemFolderShareZip(t *testing.T) {
 
 	// The download limit (1) must now be hit — exactly one download was
 	// recorded for the whole zip, not once per file inside it.
-	if _, _, _, err := shareSvc.PrepareFolderShareZip(ctx, share.Token, "", nil); !errors.Is(err, domain.ErrDownloadLimitHit) {
+	if _, _, _, err := shareSvc.PrepareFolderShareZip(ctx, share.Token, "", nil, uuid.Nil); !errors.Is(err, domain.ErrDownloadLimitHit) {
 		t.Errorf("second zip attempt: got %v, want %v", err, domain.ErrDownloadLimitHit)
 	}
 }
@@ -275,7 +275,7 @@ func TestShareService_RedeemFolderShareZip_WrongPasswordRejectedBeforeStreaming(
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
 
-	_, _, _, err = shareSvc.PrepareFolderShareZip(ctx, share.Token, "wrong", nil)
+	_, _, _, err = shareSvc.PrepareFolderShareZip(ctx, share.Token, "wrong", nil, uuid.Nil)
 	if !errors.Is(err, domain.ErrInvalidPassword) {
 		t.Errorf("got %v, want %v", err, domain.ErrInvalidPassword)
 	}

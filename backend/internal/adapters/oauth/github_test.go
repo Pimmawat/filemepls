@@ -12,7 +12,7 @@ import (
 )
 
 func TestGitHubProvider_AuthorizeURL(t *testing.T) {
-	p := NewGitHubProvider("client-id", "client-secret", "http://localhost:8080/api/auth/github/callback")
+	p := NewGitHubProvider("client-id", "client-secret", "http://localhost:8008/api/auth/github/callback")
 	url := p.AuthorizeURL("the-state")
 
 	if !strings.HasPrefix(url, githubEndpoint.AuthURL) {

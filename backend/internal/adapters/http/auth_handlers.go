@@ -58,6 +58,49 @@ func CallbackHandler(auth *usecase.AuthService, frontendBaseURL, defaultLocale s
 	}
 }
 
+// RegisterHandler creates a new email+password account and signs the
+// caller in immediately (matching the OAuth callback's behavior of landing
+// the visitor in a session right away rather than requiring a separate
+// login step after signup).
+func RegisterHandler(auth *usecase.AuthService, jwtTTL time.Duration, cookieDomain string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req registerRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		token, user, err := auth.Register(c.Request.Context(), req.Email, req.Password, req.DisplayName)
+		if err != nil {
+			respondErr(c, err)
+			return
+		}
+
+		c.SetCookie(sessionCookieName, token, int(jwtTTL.Seconds()), "/", cookieDomain, isSecureRequest(c), true)
+		c.JSON(http.StatusCreated, toUserDTO(user))
+	}
+}
+
+// LoginHandler verifies an email+password pair and starts a session.
+func LoginHandler(auth *usecase.AuthService, jwtTTL time.Duration, cookieDomain string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req loginRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		token, user, err := auth.Login(c.Request.Context(), req.Email, req.Password)
+		if err != nil {
+			respondErr(c, err)
+			return
+		}
+
+		c.SetCookie(sessionCookieName, token, int(jwtTTL.Seconds()), "/", cookieDomain, isSecureRequest(c), true)
+		c.JSON(http.StatusOK, toUserDTO(user))
+	}
+}
+
 func LogoutHandler(cookieDomain string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.SetCookie(sessionCookieName, "", -1, "/", cookieDomain, isSecureRequest(c), true)

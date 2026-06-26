@@ -26,8 +26,13 @@ func statusFor(err error) int {
 		return http.StatusGone
 	case errors.Is(err, domain.ErrAlreadyGranted):
 		return http.StatusConflict
-	case errors.Is(err, domain.ErrInvalidPassword), errors.Is(err, domain.ErrPasswordRequired):
+	case errors.Is(err, domain.ErrInvalidPassword),
+		errors.Is(err, domain.ErrPasswordRequired),
+		errors.Is(err, domain.ErrAuthRequired),
+		errors.Is(err, domain.ErrInvalidCredentials):
 		return http.StatusUnauthorized
+	case errors.Is(err, domain.ErrEmailAlreadyTaken):
+		return http.StatusConflict
 	case errors.Is(err, domain.ErrInvalidVisibility),
 		errors.Is(err, domain.ErrInvalidSize),
 		errors.Is(err, domain.ErrEmptyHash),
@@ -37,7 +42,9 @@ func statusFor(err error) int {
 		errors.Is(err, domain.ErrInvalidFolderName),
 		errors.Is(err, domain.ErrCyclicMove),
 		errors.Is(err, domain.ErrShareTargetRequired),
-		errors.Is(err, domain.ErrShareTargetMismatch):
+		errors.Is(err, domain.ErrShareTargetMismatch),
+		errors.Is(err, domain.ErrEmptyPasswordHash),
+		errors.Is(err, domain.ErrWeakPassword):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError

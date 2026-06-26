@@ -19,8 +19,29 @@
   "Login": {
     "title": "Log in to FileMePls",
     "subtitle": "Choose a provider to continue",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "loginButton": "Log in",
+    "loggingIn": "Logging in...",
+    "loginFailed": "Could not log in",
+    "noAccount": "Don't have an account?",
+    "registerLink": "Register",
+    "or": "or",
     "continueWithGithub": "Continue with GitHub",
     "continueWithGoogle": "Continue with Google (Still has bugs eieieieiei)"
+  },
+  "Register": {
+    "title": "Create your FileMePls account",
+    "subtitle": "Sign up with your email",
+    "displayNameLabel": "Display name",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "registerButton": "Register",
+    "registering": "Registering...",
+    "registerFailed": "Could not register",
+    "haveAccount": "Already have an account?",
+    "loginLink": "Log in"
   },
   "Files": {
     "title": "My Files",
@@ -84,6 +105,7 @@
     "readyTitle": "File ready to download",
     "expiredTitle": "This link has expired",
     "limitReachedTitle": "Download limit reached",
+    "authRequiredTitle": "Sign in to view this link",
     "notFoundTitle": "Link not found",
     "needsPasswordTitle": "This file is password protected",
     "passwordLabel": "Password",

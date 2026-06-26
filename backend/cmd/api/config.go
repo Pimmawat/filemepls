@@ -43,10 +43,10 @@ func loadConfig() config {
 	loadDotEnv(".env")
 
 	return config{
-		HTTPAddr:           envOr("HTTP_ADDR", ":8080"),
-		FrontendBaseURL:    envOr("FRONTEND_BASE_URL", "http://localhost:3000"),
+		HTTPAddr:           envOr("HTTP_ADDR", ":8008"),
+		FrontendBaseURL:    envOr("FRONTEND_BASE_URL", "http://localhost:3003"),
 		DefaultLocale:      envOr("DEFAULT_LOCALE", "th"),
-		CORSAllowedOrigins: envCSVOr("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+		CORSAllowedOrigins: envCSVOr("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3003"}),
 		CookieDomain:       os.Getenv("COOKIE_DOMAIN"),
 
 		DatabaseURL: requireEnv("DATABASE_URL"),
@@ -64,11 +64,11 @@ func loadConfig() config {
 
 		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		GitHubRedirectURI:  envOr("GITHUB_REDIRECT_URI", "http://localhost:8080/api/auth/github/callback"),
+		GitHubRedirectURI:  envOr("GITHUB_REDIRECT_URI", "http://localhost:8008/api/auth/github/callback"),
 
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		GoogleRedirectURI:  envOr("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/google/callback"),
+		GoogleRedirectURI:  envOr("GOOGLE_REDIRECT_URI", "http://localhost:8008/api/auth/google/callback"),
 	}
 }
 

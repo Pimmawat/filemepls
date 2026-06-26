@@ -122,8 +122,9 @@ func RevokeShareHandler(shares *usecase.ShareService) gin.HandlerFunc {
 func PublicShareInfoHandler(shares *usecase.ShareService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.Param("token")
+		requesterID := optionalUserIDFromContext(c)
 
-		share, f, folder, err := shares.GetPublicShare(c.Request.Context(), token)
+		share, f, folder, err := shares.GetPublicShare(c.Request.Context(), token, requesterID)
 		switch {
 		case err == nil:
 			if share.RequiresPassword() {
@@ -135,7 +136,7 @@ func PublicShareInfoHandler(shares *usecase.ShareService) gin.HandlerFunc {
 				dto := toFileDTO(f)
 				resp.File = &dto
 			} else {
-				browse, err := shares.BrowsePublicFolder(c.Request.Context(), token, nil)
+				browse, err := shares.BrowsePublicFolder(c.Request.Context(), token, nil, requesterID)
 				if err != nil {
 					respondErr(c, err)
 					return
@@ -149,6 +150,8 @@ func PublicShareInfoHandler(shares *usecase.ShareService) gin.HandlerFunc {
 			c.JSON(http.StatusOK, publicShareStateResponse{Status: "expired"})
 		case errors.Is(err, domain.ErrDownloadLimitHit):
 			c.JSON(http.StatusOK, publicShareStateResponse{Status: "limit_reached"})
+		case errors.Is(err, domain.ErrAuthRequired):
+			c.JSON(http.StatusOK, publicShareStateResponse{Status: "auth_required"})
 		case errors.Is(err, domain.ErrNotFound):
 			c.JSON(http.StatusNotFound, publicShareStateResponse{Status: "not_found"})
 		default:
@@ -172,7 +175,7 @@ func VerifySharePasswordHandler(shares *usecase.ShareService) gin.HandlerFunc {
 			return
 		}
 
-		if err := shares.VerifySharePassword(c.Request.Context(), token, req.Password); err != nil {
+		if err := shares.VerifySharePassword(c.Request.Context(), token, req.Password, optionalUserIDFromContext(c)); err != nil {
 			respondErr(c, err)
 			return
 		}
@@ -199,12 +202,13 @@ func BrowsePublicFolderShareHandler(shares *usecase.ShareService) gin.HandlerFun
 		var req browseFolderShareRequest
 		_ = c.ShouldBindJSON(&req) // an empty body is valid (root, no password)
 
-		if err := shares.VerifySharePassword(c.Request.Context(), token, req.Password); err != nil {
+		requesterID := optionalUserIDFromContext(c)
+		if err := shares.VerifySharePassword(c.Request.Context(), token, req.Password, requesterID); err != nil {
 			respondErr(c, err)
 			return
 		}
 
-		browse, err := shares.BrowsePublicFolder(c.Request.Context(), token, req.FolderID)
+		browse, err := shares.BrowsePublicFolder(c.Request.Context(), token, req.FolderID, requesterID)
 		if err != nil {
 			respondErr(c, err)
 			return
@@ -225,7 +229,7 @@ func PublicShareDownloadHandler(shares *usecase.ShareService) gin.HandlerFunc {
 		_ = c.ShouldBind(&req) // an empty/missing password field is valid (no-password shares)
 
 		stream, offset, contentLength, totalSize, partial, mime, file, err := shares.RedeemShareDownload(
-			c.Request.Context(), token, req.Password, c.GetHeader("Range"))
+			c.Request.Context(), token, req.Password, c.GetHeader("Range"), optionalUserIDFromContext(c))
 		if err != nil {
 			respondErr(c, err)
 			return
@@ -253,7 +257,7 @@ func PublicFolderFileDownloadHandler(shares *usecase.ShareService) gin.HandlerFu
 		_ = c.ShouldBind(&req)
 
 		stream, offset, contentLength, totalSize, partial, mime, file, err := shares.RedeemFolderFileDownload(
-			c.Request.Context(), token, fileID, req.Password, c.GetHeader("Range"))
+			c.Request.Context(), token, fileID, req.Password, c.GetHeader("Range"), optionalUserIDFromContext(c))
 		if err != nil {
 			respondErr(c, err)
 			return
@@ -283,7 +287,7 @@ func PublicFolderZipHandler(shares *usecase.ShareService) gin.HandlerFunc {
 		var req zipFolderShareRequest
 		_ = c.ShouldBind(&req)
 
-		ownerID, folderID, folderName, err := shares.PrepareFolderShareZip(c.Request.Context(), token, req.Password, req.FolderID)
+		ownerID, folderID, folderName, err := shares.PrepareFolderShareZip(c.Request.Context(), token, req.Password, req.FolderID, optionalUserIDFromContext(c))
 		if err != nil {
 			respondErr(c, err)
 			return

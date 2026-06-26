@@ -57,7 +57,7 @@ func main() {
 	folderService := usecase.NewFolderService(folderRepo, fileRepo, fileService, accessGrantRepo, storage)
 	shareService := usecase.NewShareService(fileRepo, folderRepo, shareRepo, storage, hasher)
 	permissionService := usecase.NewPermissionService(fileRepo, folderRepo, accessGrantRepo, userRepo)
-	authService := usecase.NewAuthService(userRepo, authProviders, []byte(cfg.JWTSecret), cfg.JWTTTL)
+	authService := usecase.NewAuthService(userRepo, authProviders, hasher, []byte(cfg.JWTSecret), cfg.JWTTTL)
 
 	router := httpadapter.NewRouter(httpadapter.Deps{
 		Files:           fileService,

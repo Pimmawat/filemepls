@@ -12,7 +12,7 @@ import (
 )
 
 func TestGoogleProvider_AuthorizeURL(t *testing.T) {
-	p := NewGoogleProvider("client-id", "client-secret", "http://localhost:8080/api/auth/google/callback")
+	p := NewGoogleProvider("client-id", "client-secret", "http://localhost:8008/api/auth/google/callback")
 	url := p.AuthorizeURL("the-state")
 
 	if !strings.HasPrefix(url, googleEndpoint.AuthURL) {

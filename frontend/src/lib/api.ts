@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8008";
 
 export class ApiError extends Error {
   constructor(
@@ -96,7 +96,7 @@ export type ShareLink = {
 };
 
 export type PublicShareState = {
-  status: "ok" | "expired" | "limit_reached" | "needs_password" | "not_found";
+  status: "ok" | "expired" | "limit_reached" | "needs_password" | "auth_required" | "not_found";
   targetType?: "file" | "folder";
   file?: FileMeta;
   folder?: BrowseResult;
@@ -139,6 +139,18 @@ export const api = {
   logout: () => apiFetch("/api/auth/logout", { method: "POST" }),
   authorizeUrl: (provider: "github" | "google") =>
     `${API_BASE_URL}/api/auth/${provider}/authorize`,
+  register: (email: string, password: string, displayName: string) =>
+    apiFetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, displayName }),
+    }).then((r) => r.json() as Promise<User>),
+  login: (email: string, password: string) =>
+    apiFetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }).then((r) => r.json() as Promise<User>),
 
   listFiles: (cookie?: string) =>
     apiFetch("/api/files", { cookie }).then((r) => r.json() as Promise<FileMeta[]>),
