@@ -5,11 +5,23 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
 	"filemepls/internal/sendhub"
+)
+
+const (
+	// pongWait is how long a connection may go without any read (data or a
+	// pong reply to our ping) before it's considered dead and torn down.
+	pongWait = 60 * time.Second
+	// pingPeriod must be < pongWait so a live peer always answers in time.
+	pingPeriod = (pongWait * 9) / 10
+	// writeWait caps a single write so one stuck client can't block a roster
+	// broadcast (or the ping loop) indefinitely.
+	writeWait = 10 * time.Second
 )
 
 // wsClient adapts a single *websocket.Conn to sendhub.Client. A mutex
@@ -30,6 +42,7 @@ func (c *wsClient) Send(msg sendhub.Message) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	if err := c.conn.WriteMessage(websocket.TextMessage, b); err != nil {
 		log.Printf("sendhub: write message: %v", err)
 	}
@@ -67,10 +80,41 @@ func SendWSHandler(hub *sendhub.Hub, allowedOrigins []string) gin.HandlerFunc {
 		client := &wsClient{conn: conn}
 		defer func() { _ = conn.Close() }()
 
+		// A dead-but-not-closed (half-open) TCP connection would otherwise sit
+		// in the roster forever and leak this goroutine. The read deadline +
+		// pong handler tear it down: every ping we send must be answered
+		// (browsers auto-pong) within pongWait, and any inbound frame also
+		// refreshes the deadline.
+		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+		conn.SetPongHandler(func(string) error {
+			return conn.SetReadDeadline(time.Now().Add(pongWait))
+		})
+
 		id, name := hub.Join(client)
 		defer func() {
 			hub.Leave(id)
 			hub.BroadcastRoster()
+		}()
+
+		done := make(chan struct{})
+		defer close(done)
+		go func() {
+			ticker := time.NewTicker(pingPeriod)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					client.mu.Lock()
+					_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+					err := conn.WriteMessage(websocket.PingMessage, nil)
+					client.mu.Unlock()
+					if err != nil {
+						return
+					}
+				}
+			}
 		}()
 
 		client.Send(sendhub.Message{Type: "hello", SelfID: id, SelfName: name})
@@ -81,6 +125,7 @@ func SendWSHandler(hub *sendhub.Hub, allowedOrigins []string) gin.HandlerFunc {
 			if err != nil {
 				return
 			}
+			_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 
 			var msg sendhub.Message
 			if err := json.Unmarshal(data, &msg); err != nil {

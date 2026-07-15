@@ -3,7 +3,6 @@ package http
 import (
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -103,7 +102,7 @@ func FolderZipHandler(folders *usecase.FolderService) gin.HandlerFunc {
 			return
 		}
 
-		c.Header("Content-Disposition", contentDisposition(folder.Name+".zip", time.Now()))
+		c.Header("Content-Disposition", contentDisposition(folder.Name+".zip"))
 		c.Header("Content-Type", "application/zip")
 		if err := folders.StreamZip(c.Request.Context(), folder.OwnerID, folder.ID, c.Writer); err != nil {
 			log.Printf("folder zip stream error: %v", err)

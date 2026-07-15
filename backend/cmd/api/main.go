@@ -73,6 +73,10 @@ func main() {
 		DefaultLocale:   cfg.DefaultLocale,
 		JWTTTL:          cfg.JWTTTL,
 		CookieDomain:    cfg.CookieDomain,
+		MaxUploadSize:   cfg.MaxUploadSize,
+		TrustedProxies:  cfg.TrustedProxies,
+		SendRequireAuth: cfg.SendRequireAuth,
+		Ready:           pool.Ping,
 	})
 
 	srv := &http.Server{
@@ -95,6 +99,8 @@ func main() {
 		}
 	}()
 
+	go runBlobGC(ctx, fileService)
+
 	<-ctx.Done()
 	log.Println("shutting down")
 
@@ -102,5 +108,30 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("graceful shutdown failed: %v", err)
+	}
+}
+
+// runBlobGC periodically reclaims orphaned blobs (bytes whose File row failed
+// to save). The grace period keeps it from racing an in-flight upload that has
+// written its blob but not yet its File row. Stops when ctx is cancelled.
+func runBlobGC(ctx context.Context, files *usecase.FileService) {
+	const (
+		interval = time.Hour
+		grace    = time.Hour
+	)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := files.PurgeOrphanBlobs(ctx, time.Now().Add(-grace))
+			if err != nil && ctx.Err() == nil {
+				log.Printf("blob gc: %v", err)
+			} else if n > 0 {
+				log.Printf("blob gc: purged %d orphan blob(s)", n)
+			}
+		}
 	}
 }

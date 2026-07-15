@@ -130,6 +130,19 @@ func (r *fakeBlobRepository) Delete(_ context.Context, hash string) error {
 	return nil
 }
 
+// ListOrphanHashes here just returns every blob older than olderThan; unlike
+// the postgres query it doesn't check file references (the fake has none).
+// That's fine because PurgeOrphanBlobs re-verifies each with CountByHash.
+func (r *fakeBlobRepository) ListOrphanHashes(_ context.Context, olderThan time.Time) ([]string, error) {
+	var out []string
+	for hash, b := range r.byHash {
+		if b.CreatedAt.Before(olderThan) {
+			out = append(out, hash)
+		}
+	}
+	return out, nil
+}
+
 var _ ports.BlobRepository = (*fakeBlobRepository)(nil)
 
 // --- fakeFolderRepository ---

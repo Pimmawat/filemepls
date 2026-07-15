@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +40,7 @@ func writeDownloadResponse(c *gin.Context, stream io.ReadCloser, offset, content
 // that preserves the original uploaded filename and extension so the file
 // opens correctly by association. Falls back to a generic name if the
 // original filename is empty.
-func contentDisposition(name string, createdAt time.Time) string {
+func contentDisposition(name string) string {
 	name = sanitizeHeaderValue(filepath.Base(name))
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = "download"

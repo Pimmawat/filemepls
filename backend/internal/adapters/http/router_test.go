@@ -113,6 +113,15 @@ func (r *memBlobRepo) Delete(_ context.Context, hash string) error {
 	delete(r.byHash, hash)
 	return nil
 }
+func (r *memBlobRepo) ListOrphanHashes(_ context.Context, olderThan time.Time) ([]string, error) {
+	var out []string
+	for hash, b := range r.byHash {
+		if b.CreatedAt.Before(olderThan) {
+			out = append(out, hash)
+		}
+	}
+	return out, nil
+}
 
 type memFolderRepo struct{ byID map[uuid.UUID]*domain.Folder }
 
@@ -502,6 +511,72 @@ func TestHealthz(t *testing.T) {
 	rec := ts.do(t, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	ts := newTestServer(t)
+	rec := ts.do(t, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	want := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"X-Frame-Options":        "DENY",
+		"Referrer-Policy":        "no-referrer",
+	}
+	for k, v := range want {
+		if got := rec.Header().Get(k); got != v {
+			t.Errorf("header %s = %q, want %q", k, got, v)
+		}
+	}
+}
+
+func TestReadyz(t *testing.T) {
+	ready := NewRouter(Deps{Ready: func(context.Context) error { return nil }})
+	rec := httptest.NewRecorder()
+	ready.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("ready: status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	// context.DeadlineExceeded stands in for an unreachable dependency.
+	down := NewRouter(Deps{Ready: func(context.Context) error { return context.DeadlineExceeded }})
+	rec2 := httptest.NewRecorder()
+	down.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if rec2.Code != http.StatusServiceUnavailable {
+		t.Errorf("not-ready: status = %d, want %d", rec2.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestRateLimit_LoginBruteForce(t *testing.T) {
+	ts := newTestServer(t)
+	got429 := false
+	for i := 0; i < 12; i++ { // limiter allows 10/min per IP
+		body := bytes.NewBufferString(`{"email":"x@y.z","password":"nope"}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", body)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		ts.router.ServeHTTP(rec, req) // no cookie: these are anonymous login attempts
+		if rec.Code == http.StatusTooManyRequests {
+			got429 = true
+			break
+		}
+	}
+	if !got429 {
+		t.Error("expected a 429 after exceeding the login rate limit")
+	}
+}
+
+func TestSendRequireAuth_RejectsAnonymous(t *testing.T) {
+	authSvc := usecase.NewAuthService(newMemUserRepo(), nil, memHasher{}, []byte("test-secret"), time.Hour)
+	router := NewRouter(Deps{
+		Auth:            authSvc,
+		SendHub:         sendhub.New(),
+		AllowedOrigins:  []string{"http://localhost:3000"},
+		SendRequireAuth: true,
+	})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/send/ws", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous send WS with SendRequireAuth: status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 

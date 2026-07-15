@@ -21,6 +21,13 @@ type config struct {
 	// sent to both instead of being scoped to whichever one issued it.
 	CookieDomain string
 
+	// TrustedProxies is the list of proxy IPs/CIDRs gin may trust for the
+	// client IP (X-Forwarded-For). Empty = trust none, so ClientIP() falls
+	// back to the direct socket address — the safe default that keeps the
+	// rate limiter from being defeated by a spoofed X-Forwarded-For. Set this
+	// to the real reverse proxy's address(es) in production.
+	TrustedProxies []string
+
 	DatabaseURL string
 
 	JWTSecret string
@@ -29,6 +36,12 @@ type config struct {
 	StorageRoot   string
 	MaxUploadSize int64
 	AllowedMimes  []string
+
+	// SendRequireAuth gates the anonymous LAN-send signaling hub behind a
+	// valid session when true. Default false preserves the LocalSend-style
+	// open model; set true when the backend is reachable beyond a trusted LAN
+	// so only logged-in users can appear in the peer roster.
+	SendRequireAuth bool
 
 	GitHubClientID     string
 	GitHubClientSecret string
@@ -48,11 +61,14 @@ func loadConfig() config {
 		DefaultLocale:      envOr("DEFAULT_LOCALE", "th"),
 		CORSAllowedOrigins: envCSVOr("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3003"}),
 		CookieDomain:       os.Getenv("COOKIE_DOMAIN"),
+		TrustedProxies:     envCSVOr("TRUSTED_PROXIES", nil),
 
 		DatabaseURL: requireEnv("DATABASE_URL"),
 
-		JWTSecret: requireEnv("JWT_SECRET"),
+		JWTSecret: requireStrongSecret("JWT_SECRET"),
 		JWTTTL:    envDurationOr("JWT_TTL", 24*time.Hour),
+
+		SendRequireAuth: envBoolOr("SEND_REQUIRE_AUTH", false),
 
 		StorageRoot:   envOr("STORAGE_ROOT", "./data/storage"),
 		MaxUploadSize: envInt64Or("MAX_UPLOAD_SIZE", 100<<20), // 100MB
@@ -125,6 +141,22 @@ func requireEnv(key string) string {
 	return v
 }
 
+// placeholderSecret is the value shipped in .env.example; refusing it at boot
+// prevents a deployment from ever running with a signing key that is public
+// knowledge (anyone could forge a session for any user).
+const placeholderSecret = "change-me-to-a-long-random-string"
+
+// requireStrongSecret is requireEnv plus a guard against the committed
+// placeholder and against secrets too short to be safe for HS256 signing.
+// Generate a real one with e.g. `openssl rand -base64 48`.
+func requireStrongSecret(key string) string {
+	v := requireEnv(key)
+	if v == placeholderSecret || len(v) < 32 {
+		log.Fatalf("%s must be a strong random value (>= 32 bytes), not the placeholder", key)
+	}
+	return v
+}
+
 func envCSVOr(key string, fallback []string) []string {
 	v := os.Getenv(key)
 	if v == "" {
@@ -138,6 +170,18 @@ func envCSVOr(key string, fallback []string) []string {
 		}
 	}
 	return out
+}
+
+func envBoolOr(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		log.Fatalf("invalid value for %s: %v", key, err)
+	}
+	return b
 }
 
 func envInt64Or(key string, fallback int64) int64 {

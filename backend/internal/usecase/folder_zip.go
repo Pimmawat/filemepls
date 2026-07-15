@@ -5,11 +5,29 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"filemepls/internal/ports"
 )
+
+// sanitizeZipName reduces a stored file/folder name to a single, safe path
+// segment for use as a ZIP entry name. File names are persisted verbatim from
+// the client (unlike folder names, which reject separators at creation), so
+// without this a name like `..\..\evil` or `../evil` would produce a
+// zip-slip entry that escapes the extraction directory on whoever unpacks the
+// archive — a real risk given the Windows deployment target. path.Base (not
+// filepath.Base) is OS-independent, so backslashes are normalized first.
+func sanitizeZipName(name string) string {
+	name = strings.ReplaceAll(name, "\\", "/")
+	base := path.Base(name)
+	if base == "" || base == "." || base == ".." {
+		return "unnamed"
+	}
+	return base
+}
 
 // streamFolderZip writes a ZIP archive of folderID's entire recursive
 // contents to w, streaming each file directly from storage. archive/zip
@@ -41,7 +59,7 @@ func walkAndZip(ctx context.Context, zw *zip.Writer, storage ports.StoragePort, 
 		if err != nil {
 			return fmt.Errorf("usecase: open file for zip: %w", err)
 		}
-		entry, err := zw.Create(prefix + f.Name)
+		entry, err := zw.Create(prefix + sanitizeZipName(f.Name))
 		if err != nil {
 			_ = rc.Close()
 			return fmt.Errorf("usecase: create zip entry: %w", err)
@@ -58,7 +76,7 @@ func walkAndZip(ctx context.Context, zw *zip.Writer, storage ports.StoragePort, 
 		return fmt.Errorf("usecase: list subfolders for zip: %w", err)
 	}
 	for _, sub := range subfolders {
-		if err := walkAndZip(ctx, zw, storage, fileRepo, folderRepo, ownerID, sub.ID, prefix+sub.Name+"/"); err != nil {
+		if err := walkAndZip(ctx, zw, storage, fileRepo, folderRepo, ownerID, sub.ID, prefix+sanitizeZipName(sub.Name)+"/"); err != nil {
 			return err
 		}
 	}

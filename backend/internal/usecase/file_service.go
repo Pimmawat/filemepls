@@ -1,12 +1,14 @@
 package usecase
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -49,6 +51,26 @@ func (s *FileService) Upload(ctx context.Context, ownerID uuid.UUID, declaredMim
 			return nil, err
 		}
 	}
+
+	// Sniff the real content type from the first bytes and reject when it
+	// isn't allowed, so a client can't smuggle an unlisted type past the
+	// allowlist by lying in the multipart Content-Type header. The declared
+	// mime is still what gets stored (display metadata only); downloads are
+	// always served as attachments with X-Content-Type-Options: nosniff, so a
+	// mislabeled file can't be rendered inline regardless. octet-stream is
+	// treated as "unknown, don't second-guess the declaration" to avoid
+	// false-rejecting binary formats DetectContentType can't identify.
+	head := make([]byte, 512)
+	n, err := io.ReadFull(body, head)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil, fmt.Errorf("usecase: read upload head: %w", err)
+	}
+	head = head[:n]
+	sniffed := strings.TrimSpace(strings.SplitN(http.DetectContentType(head), ";", 2)[0])
+	if sniffed != "application/octet-stream" && !mimeAllowed(sniffed, s.allowedMimes) {
+		return nil, domain.ErrUnsupportedMime
+	}
+	body = io.MultiReader(bytes.NewReader(head), body)
 
 	stagingKey := domain.StorageKey("_staging/" + uuid.New().String())
 	hasher := sha256.New()
@@ -211,6 +233,50 @@ func (s *FileService) DownloadRange(ctx context.Context, userID, fileID uuid.UUI
 		cl = total - off
 	}
 	return rc, off, cl, total, isPartial, f.Mime, f.Name, f.CreatedAt, nil
+}
+
+// PurgeOrphanBlobs deletes blob records (and their on-disk bytes) that no File
+// references and that are older than olderThan. Orphans arise when an upload
+// promotes a blob but then fails to save its File row (a DB error between the
+// two steps) — harmless but never otherwise reclaimed. Each candidate is
+// re-checked with CountByHash before deletion so a blob referenced since the
+// scan (a concurrent upload) is left alone. Returns how many were purged.
+func (s *FileService) PurgeOrphanBlobs(ctx context.Context, olderThan time.Time) (int, error) {
+	hashes, err := s.blobs.ListOrphanHashes(ctx, olderThan)
+	if err != nil {
+		return 0, fmt.Errorf("usecase: list orphan blobs: %w", err)
+	}
+
+	purged := 0
+	for _, hash := range hashes {
+		count, err := s.files.CountByHash(ctx, hash)
+		if err != nil {
+			return purged, fmt.Errorf("usecase: count files by hash: %w", err)
+		}
+		if count > 0 {
+			continue // referenced again since the scan; not an orphan
+		}
+
+		blob, err := s.blobs.FindByHash(ctx, hash)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				continue // already gone
+			}
+			return purged, fmt.Errorf("usecase: load orphan blob: %w", err)
+		}
+		key, err := blob.StorageKey()
+		if err != nil {
+			return purged, err
+		}
+		if err := s.storage.Delete(ctx, key); err != nil {
+			return purged, fmt.Errorf("usecase: delete orphan blob bytes: %w", err)
+		}
+		if err := s.blobs.Delete(ctx, hash); err != nil {
+			return purged, fmt.Errorf("usecase: delete orphan blob record: %w", err)
+		}
+		purged++
+	}
+	return purged, nil
 }
 
 // mimeAllowed checks mime against the allowlist. An allowlist containing

@@ -127,26 +127,40 @@ export function FileManager({
     (fileName: string, progress: number, speed: number, current: number, total: number) => {
       toast.custom(
         (toastId) => (
-          <div className="flex w-[356px] flex-col gap-2 rounded-lg border bg-popover p-4 text-popover-foreground shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="truncate text-sm font-medium">
-                {total > 1 ? `(${current}/${total}) ${fileName}` : fileName}
-              </span>
-              <button
-                type="button"
-                className="ml-2 shrink-0 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  abortControllerRef.current?.abort();
-                  toast.dismiss(toastId);
-                }}
-              >
-                <X className="size-4" />
-              </button>
+          <div
+            className="flex w-[356px] items-start gap-3 rounded-xl border p-3.5 text-popover-foreground backdrop-blur-md backdrop-saturate-150"
+            style={{
+              background: "color-mix(in oklab, var(--popover) 90%, transparent)",
+              boxShadow: "0 1px 2px oklch(0 0 0 / 0.06), 0 12px 32px -12px oklch(0 0 0 / 0.3)",
+            }}
+          >
+            <div
+              className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md text-[var(--brand)]"
+              style={{ background: "color-mix(in oklab, var(--brand) 16%, transparent)" }}
+            >
+              <Upload className="size-4" />
             </div>
-            <Progress value={progress} />
-            <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
-              <span>{progress}%</span>
-              <span>{formatSpeed(speed)}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate font-heading text-sm font-semibold">
+                  {total > 1 ? `(${current}/${total}) ${fileName}` : fileName}
+                </span>
+                <button
+                  type="button"
+                  className="-mr-1 shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => {
+                    abortControllerRef.current?.abort();
+                    toast.dismiss(toastId);
+                  }}
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <Progress value={progress} />
+              <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+                <span>{progress}%</span>
+                <span>{formatSpeed(speed)}</span>
+              </div>
             </div>
           </div>
         ),

@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -72,6 +73,46 @@ func TestFileService_Upload_RejectsDisallowedMime(t *testing.T) {
 	}
 }
 
+// A client can't smuggle disallowed content past the allowlist by lying in the
+// declared Content-Type: the real type is sniffed from the bytes and checked.
+func TestFileService_Upload_RejectsMimeSpoofedByContent(t *testing.T) {
+	files := newFakeFileRepository()
+	blobs := newFakeBlobRepository()
+	folders := newFakeFolderRepository()
+	storage := newFakeStorage()
+	grants := newFakeAccessGrantRepository(files, folders)
+	svc := NewFileService(files, blobs, folders, grants, storage, 0, []string{"image/png"})
+
+	html := "<html><body><script>alert(1)</script></body></html>"
+	_, err := svc.Upload(context.Background(), uuid.New(), "image/png", "photo.png", nil, strings.NewReader(html))
+	if !errors.Is(err, domain.ErrUnsupportedMime) {
+		t.Fatalf("HTML declared as image/png: got %v, want %v", err, domain.ErrUnsupportedMime)
+	}
+	if len(storage.objects) != 0 {
+		t.Errorf("expected nothing staged after a rejected spoofed upload, found %d objects", len(storage.objects))
+	}
+}
+
+// A genuine PNG (magic bytes sniff to image/png) is accepted under an
+// image/png-only allowlist — the sniff gate must not false-reject real content.
+func TestFileService_Upload_AcceptsGenuinePNG(t *testing.T) {
+	files := newFakeFileRepository()
+	blobs := newFakeBlobRepository()
+	folders := newFakeFolderRepository()
+	storage := newFakeStorage()
+	grants := newFakeAccessGrantRepository(files, folders)
+	svc := NewFileService(files, blobs, folders, grants, storage, 0, []string{"image/png"})
+
+	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 32) // header sniffs as image/png
+	f, err := svc.Upload(context.Background(), uuid.New(), "image/png", "real.png", nil, strings.NewReader(png))
+	if err != nil {
+		t.Fatalf("genuine PNG upload: unexpected error: %v", err)
+	}
+	if f.Size != int64(len(png)) {
+		t.Errorf("size = %d, want %d", f.Size, len(png))
+	}
+}
+
 func TestFileService_Upload_RejectsOversized(t *testing.T) {
 	svc, _, _, storage := newTestFileService()
 	big := strings.Repeat("a", 2000) // maxSize is 1000
@@ -121,6 +162,75 @@ func TestFileService_Upload_DedupsAcrossOwners(t *testing.T) {
 	objectCount := len(storage.objects)
 	if objectCount != 1 {
 		t.Errorf("expected exactly 1 stored object, got %d", objectCount)
+	}
+}
+
+func TestFileService_PurgeOrphanBlobs(t *testing.T) {
+	ctx := context.Background()
+	svc, _, blobs, storage := newTestFileService()
+	owner := uuid.New()
+
+	// A live upload: its blob is referenced by a File and must survive.
+	live, err := svc.Upload(ctx, owner, "text/plain", "keep.txt", nil, strings.NewReader("keep me"))
+	if err != nil {
+		t.Fatalf("Upload() error: %v", err)
+	}
+
+	// An orphan: a blob + bytes on disk with no File referencing it and an old
+	// CreatedAt (past the grace period).
+	orphan, err := domain.NewBlob(strings.Repeat("a", 64), 3, "text/plain")
+	if err != nil {
+		t.Fatalf("NewBlob() error: %v", err)
+	}
+	orphan.CreatedAt = time.Now().Add(-2 * time.Hour)
+	if err := blobs.Save(ctx, orphan); err != nil {
+		t.Fatalf("blobs.Save() error: %v", err)
+	}
+	orphanKey, _ := orphan.StorageKey()
+	if _, err := storage.Save(ctx, orphanKey, strings.NewReader("abc")); err != nil {
+		t.Fatalf("storage.Save() error: %v", err)
+	}
+
+	purged, err := svc.PurgeOrphanBlobs(ctx, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("PurgeOrphanBlobs() error: %v", err)
+	}
+	if purged != 1 {
+		t.Errorf("purged = %d, want 1", purged)
+	}
+
+	// Orphan gone, both record and bytes.
+	if _, err := blobs.FindByHash(ctx, orphan.Hash); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("expected orphan blob record deleted, got %v", err)
+	}
+	if exists, _ := storage.Exists(ctx, orphanKey); exists {
+		t.Error("expected orphan blob bytes deleted from storage")
+	}
+
+	// Live blob untouched.
+	if _, err := blobs.FindByHash(ctx, live.Hash); err != nil {
+		t.Errorf("expected referenced blob to survive, got %v", err)
+	}
+}
+
+func TestFileService_PurgeOrphanBlobs_RespectsGracePeriod(t *testing.T) {
+	ctx := context.Background()
+	svc, _, blobs, _ := newTestFileService()
+
+	// A freshly-created orphan (recent CreatedAt) must be left alone so the
+	// sweep can't race an upload mid-way between blob-save and file-save.
+	fresh, _ := domain.NewBlob(strings.Repeat("b", 64), 3, "text/plain")
+	_ = blobs.Save(ctx, fresh)
+
+	purged, err := svc.PurgeOrphanBlobs(ctx, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("PurgeOrphanBlobs() error: %v", err)
+	}
+	if purged != 0 {
+		t.Errorf("purged = %d, want 0 (within grace period)", purged)
+	}
+	if _, err := blobs.FindByHash(ctx, fresh.Hash); err != nil {
+		t.Errorf("expected fresh blob to survive the grace period, got %v", err)
 	}
 }
 

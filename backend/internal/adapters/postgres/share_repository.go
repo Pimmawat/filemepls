@@ -93,14 +93,26 @@ func scanShareLink(row rowScanner) (*domain.ShareLink, error) {
 	return &s, nil
 }
 
+// IncrementDownloadCount atomically bumps the counter only while the link is
+// still within its limit and not expired. Doing the cap check in the same
+// statement (rather than read-then-write in the usecase) closes a TOCTOU race
+// where concurrent redemptions of a max_downloads=1 link could all pass an
+// earlier IsDownloadLimitReached check and each increment. A 0-row result
+// means the link is now exhausted/expired, surfaced as ErrDownloadLimitHit
+// (which callers already map to HTTP 410).
 func (r *ShareRepository) IncrementDownloadCount(ctx context.Context, id uuid.UUID) error {
-	const q = `UPDATE share_links SET download_count = download_count + 1 WHERE id = $1`
+	const q = `
+		UPDATE share_links
+		SET download_count = download_count + 1
+		WHERE id = $1
+		  AND (max_downloads IS NULL OR download_count < max_downloads)
+		  AND (expires_at IS NULL OR expires_at > now())`
 	tag, err := r.pool.Exec(ctx, q, id)
 	if err != nil {
 		return fmt.Errorf("postgres: increment download count: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.ErrNotFound
+		return domain.ErrDownloadLimitHit
 	}
 	return nil
 }

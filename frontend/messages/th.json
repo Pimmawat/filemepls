@@ -11,6 +11,9 @@
     "th": "ไทย",
     "en": "English"
   },
+  "ThemeToggle": {
+    "label": "สลับธีมสว่าง/มืด"
+  },
   "Login": {
     "title": "เข้าสู่ระบบ FileMePls",
     "subtitle": "เลือกผู้ให้บริการเพื่อดำเนินการต่อ",

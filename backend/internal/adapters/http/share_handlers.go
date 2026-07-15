@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -235,7 +234,7 @@ func PublicShareDownloadHandler(shares *usecase.ShareService) gin.HandlerFunc {
 			return
 		}
 
-		c.Header("Content-Disposition", contentDisposition(file.Name, file.CreatedAt))
+		c.Header("Content-Disposition", contentDisposition(file.Name))
 		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime)
 	}
 }
@@ -263,7 +262,7 @@ func PublicFolderFileDownloadHandler(shares *usecase.ShareService) gin.HandlerFu
 			return
 		}
 
-		c.Header("Content-Disposition", contentDisposition(file.Name, file.CreatedAt))
+		c.Header("Content-Disposition", contentDisposition(file.Name))
 		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime)
 	}
 }
@@ -293,7 +292,7 @@ func PublicFolderZipHandler(shares *usecase.ShareService) gin.HandlerFunc {
 			return
 		}
 
-		c.Header("Content-Disposition", contentDisposition(folderName+".zip", time.Now()))
+		c.Header("Content-Disposition", contentDisposition(folderName+".zip"))
 		c.Header("Content-Type", "application/zip")
 		if err := shares.StreamZip(c.Request.Context(), ownerID, folderID, c.Writer); err != nil {
 			log.Printf("folder zip stream error: %v", err)

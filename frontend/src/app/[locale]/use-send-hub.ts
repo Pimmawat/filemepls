@@ -248,6 +248,14 @@ export function useSendHub(wsUrl: string) {
           incomingChannel?.send("ack");
           closePeer(offer.fromId);
         },
+        () => {
+          // Size cap tripped (declared too large, or sender overran it): drop
+          // the transfer instead of letting buffered chunks exhaust the tab.
+          setIncoming((prev) =>
+            prev && prev.fromId === offer.fromId ? { ...prev, status: "failed" } : prev,
+          );
+          closePeer(offer.fromId);
+        },
       );
 
       pc.ondatachannel = (e) => {

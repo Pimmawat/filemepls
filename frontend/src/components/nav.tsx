@@ -3,6 +3,7 @@ import Image from "next/image";
 
 import { Link } from "@/i18n/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { NavUserMenu } from "@/components/nav-user-menu";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/wordmark";
@@ -20,7 +21,8 @@ export async function Nav() {
           <Image src={icon} alt="" className="size-7" />
           <Wordmark />
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex items-center gap-2 text-sm">
+          <ThemeToggle />
           <LanguageSwitcher />
           {user ? (
             <NavUserMenu user={user} />

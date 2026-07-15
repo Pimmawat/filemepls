@@ -95,6 +95,13 @@ function waitForBufferedAmountLow(channel: RTCDataChannel, signal: AbortSignal):
   });
 }
 
+// MAX_RECEIVE_SIZE is a hard ceiling on a single incoming transfer. The whole
+// file is assembled in memory (chunks[] -> Blob) before it's handed to the
+// browser, so without a cap a peer could OOM the tab either by declaring a
+// gigantic size or by streaming far more bytes than it declared. 2GB is well
+// past any realistic LAN drop while still bounding memory.
+export const MAX_RECEIVE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+
 // ReceiveAssembler turns a sequence of DataChannel messages back into a
 // Blob. Feed it every channel.onmessage event in order; it figures out
 // header vs. binary chunk vs. EOF from the framing sendFileOverChannel
@@ -104,16 +111,24 @@ export class ReceiveAssembler {
   private chunks: ArrayBuffer[] = [];
   private receivedBytes = 0;
   private lastProgressAt = 0;
+  private failed = false;
 
   constructor(
     private onProgress: (receivedBytes: number, totalBytes: number) => void,
     private onComplete: (file: Blob, meta: FileMeta) => void,
+    private onError: (reason: string) => void,
   ) {}
 
   feed(data: ArrayBuffer | string): void {
+    if (this.failed) return;
+
     if (typeof data === "string") {
       const parsed = JSON.parse(data) as { header?: FileMeta; eof?: boolean };
       if (parsed.header) {
+        if (!(parsed.header.size >= 0) || parsed.header.size > MAX_RECEIVE_SIZE) {
+          this.fail("declared file size is too large to accept");
+          return;
+        }
         this.meta = parsed.header;
         this.chunks = [];
         this.receivedBytes = 0;
@@ -131,10 +146,24 @@ export class ReceiveAssembler {
     this.receivedBytes += data.byteLength;
     if (!this.meta) return;
 
+    // A peer that streams more than it declared is buggy or hostile; stop
+    // before the buffered chunks can grow past the declared (already-capped)
+    // size and exhaust memory.
+    if (this.receivedBytes > this.meta.size) {
+      this.fail("sender exceeded the declared file size");
+      return;
+    }
+
     const now = performance.now();
     if (now - this.lastProgressAt >= PROGRESS_THROTTLE_MS || this.receivedBytes >= this.meta.size) {
       this.lastProgressAt = now;
       this.onProgress(this.receivedBytes, this.meta.size);
     }
+  }
+
+  private fail(reason: string): void {
+    this.failed = true;
+    this.chunks = []; // release buffered memory immediately
+    this.onError(reason);
   }
 }
