@@ -1,15 +1,16 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
+// theme="system" is enough: the toast's actual colours come from CSS custom
+// properties (var(--popover), var(--toast-*), …) that already flip with the
+// `.dark` class on <html>, so the toasts follow the app's theme toggle
+// regardless of what Sonner's own theme attribute says.
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="system"
       className="toaster group"
       position="bottom-right"
       closeButton

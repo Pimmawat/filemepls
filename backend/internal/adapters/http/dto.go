@@ -138,6 +138,9 @@ type createShareRequest struct {
 	ExpiresAt    *time.Time `json:"expiresAt"`
 	MaxDownloads *int       `json:"maxDownloads"`
 	Password     string     `json:"password"`
+	// Alias is an optional user-chosen custom link (used as /share/<alias>).
+	// Empty means a random token is generated.
+	Alias string `json:"alias"`
 }
 
 // redeemShareRequest binds either a JSON body (programmatic API use) or a

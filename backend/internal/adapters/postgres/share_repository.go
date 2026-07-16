@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"filemepls/internal/domain"
@@ -28,6 +30,11 @@ func (r *ShareRepository) Save(ctx context.Context, s *domain.ShareLink) error {
 	_, err := r.pool.Exec(ctx, q,
 		s.ID, s.Token, string(s.TargetType), s.FileID, s.FolderID, s.ExpiresAt, s.PasswordHash, s.MaxDownloads, s.DownloadCount, s.Visibility, s.CreatedAt)
 	if err != nil {
+		// Unique violation on the token index = the custom alias is taken.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.ErrShareAliasTaken
+		}
 		return fmt.Errorf("postgres: save share link: %w", err)
 	}
 	return nil

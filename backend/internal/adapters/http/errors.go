@@ -24,7 +24,8 @@ func statusFor(err error) int {
 		return http.StatusUnsupportedMediaType
 	case errors.Is(err, domain.ErrShareExpired), errors.Is(err, domain.ErrDownloadLimitHit):
 		return http.StatusGone
-	case errors.Is(err, domain.ErrAlreadyGranted):
+	case errors.Is(err, domain.ErrAlreadyGranted),
+		errors.Is(err, domain.ErrShareAliasTaken):
 		return http.StatusConflict
 	case errors.Is(err, domain.ErrInvalidPassword),
 		errors.Is(err, domain.ErrPasswordRequired),
@@ -43,6 +44,7 @@ func statusFor(err error) int {
 		errors.Is(err, domain.ErrCyclicMove),
 		errors.Is(err, domain.ErrShareTargetRequired),
 		errors.Is(err, domain.ErrShareTargetMismatch),
+		errors.Is(err, domain.ErrInvalidShareAlias),
 		errors.Is(err, domain.ErrEmptyPasswordHash),
 		errors.Is(err, domain.ErrWeakPassword):
 		return http.StatusBadRequest
