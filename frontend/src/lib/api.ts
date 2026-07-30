@@ -111,8 +111,6 @@ export type CreateShareLinkInput = {
   expiresAt?: string;
   maxDownloads?: number;
   password?: string;
-  // Optional custom link alias (used as /share/<alias>). Omit for a random token.
-  alias?: string;
 };
 
 export type UserSummary = {

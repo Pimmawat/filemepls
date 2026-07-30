@@ -87,28 +87,3 @@ func (s *ShareLink) RecordDownload() error {
 func MatchesToken(stored, candidate string) bool {
 	return subtle.ConstantTimeCompare([]byte(stored), []byte(candidate)) == 1
 }
-
-const (
-	minShareAliasLen = 3
-	maxShareAliasLen = 64
-)
-
-// ValidateShareAlias checks a user-supplied custom link alias, which is used
-// directly as the share token in the URL (/share/<alias>). Allowed characters
-// are letters, digits, '-' and '_' — the same URL-safe alphabet as generated
-// tokens — with a length of 3-64. NOTE: a custom alias is guessable, unlike a
-// random token, so a public/unlisted share behind one is not secret; that's an
-// accepted trade-off for a memorable link.
-func ValidateShareAlias(alias string) error {
-	if len(alias) < minShareAliasLen || len(alias) > maxShareAliasLen {
-		return ErrInvalidShareAlias
-	}
-	for _, r := range alias {
-		isAllowed := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') || r == '-' || r == '_'
-		if !isAllowed {
-			return ErrInvalidShareAlias
-		}
-	}
-	return nil
-}

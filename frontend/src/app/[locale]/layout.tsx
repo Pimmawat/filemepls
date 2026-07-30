@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Nunito, Quicksand } from "next/font/google";
 import localFont from "next/font/local";
-import { cookies } from "next/headers";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { notFound } from "next/navigation";
 
 import { routing } from "@/i18n/routing";
 import { Nav } from "@/components/nav";
-import { ThemeProvider, THEME_COOKIE } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -63,17 +62,14 @@ export default async function LocaleLayout({ children, params }: Props) {
     notFound();
   }
 
-  // Read the theme from the cookie server-side so <html> is rendered with the
-  // right class from the first byte — no flash, and no client-side <script>.
-  const themeClass = (await cookies()).get(THEME_COOKIE)?.value === "dark" ? "dark" : "";
-
   return (
     <html
       lang={locale}
-      className={`${quicksand.variable} ${nunito.variable} ${geistMono.variable} ${googleSansThai.variable} ${themeClass} h-full antialiased`}
+      suppressHydrationWarning
+      className={`${quicksand.variable} ${nunito.variable} ${geistMono.variable} ${googleSansThai.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <NextIntlClientProvider locale={locale}>
             <Nav />
             <div className="flex flex-1 flex-col">{children}</div>

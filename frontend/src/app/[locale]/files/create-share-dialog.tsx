@@ -31,7 +31,6 @@ export function CreateShareDialog({ target }: { target: Target }) {
   const [expiresAt, setExpiresAt] = useState("");
   const [maxDownloads, setMaxDownloads] = useState("");
   const [password, setPassword] = useState("");
-  const [alias, setAlias] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -41,7 +40,6 @@ export function CreateShareDialog({ target }: { target: Target }) {
     setExpiresAt("");
     setMaxDownloads("");
     setPassword("");
-    setAlias("");
   }
 
   async function loadShares() {
@@ -69,28 +67,14 @@ export function CreateShareDialog({ target }: { target: Target }) {
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         maxDownloads: maxDownloads ? Number(maxDownloads) : undefined,
         password: password || undefined,
-        alias: alias.trim() || undefined,
       };
       const created =
         target.type === "file"
           ? await api.createShareLink(target.id, input)
           : await api.createFolderShareLink(target.id, input);
-      // The backend is idempotent: an identical request (or an existing alias
-      // for this item) returns the current link instead of a duplicate, so
-      // de-dupe by id before prepending.
-      setShares((prev) => [created, ...prev.filter((s) => s.id !== created.id)]);
+      setShares((prev) => [created, ...prev]);
       resetForm();
     } catch (err) {
-      if (err instanceof ApiError && alias.trim()) {
-        if (err.status === 409) {
-          toast.error(t("aliasTaken"));
-          return;
-        }
-        if (err.status === 400) {
-          toast.error(t("aliasInvalid"));
-          return;
-        }
-      }
       toast.error(t("createFailed"), {
         description: err instanceof ApiError ? err.message : undefined,
       });
@@ -192,20 +176,6 @@ export function CreateShareDialog({ target }: { target: Target }) {
                 <option value="unlisted">{t("visibilityUnlisted")}</option>
                 <option value="private">{t("visibilityPrivate")}</option>
               </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="alias">{t("aliasLabel")}</Label>
-              <div className="flex items-center gap-1.5">
-                <span className="shrink-0 text-sm text-muted-foreground">/share/</span>
-                <Input
-                  id="alias"
-                  value={alias}
-                  onChange={(e) => setAlias(e.target.value)}
-                  placeholder={t("aliasPlaceholder")}
-                  className="flex-1"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">{t("aliasHint")}</p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="expiresAt">{t("expiresAt")}</Label>

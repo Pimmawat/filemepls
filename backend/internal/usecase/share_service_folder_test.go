@@ -39,10 +39,10 @@ func TestShareService_CreateFolderShareLink_EnforcesOwnership(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	if _, err := shareSvc.CreateFolderShareLink(ctx, other, folder.ID, domain.VisibilityPublic, nil, nil, "", ""); !errors.Is(err, domain.ErrNotOwner) {
+	if _, err := shareSvc.CreateFolderShareLink(ctx, other, folder.ID, domain.VisibilityPublic, nil, nil, ""); !errors.Is(err, domain.ErrNotOwner) {
 		t.Errorf("got %v, want %v", err, domain.ErrNotOwner)
 	}
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, folder.ID, domain.VisibilityPublic, nil, nil, "", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, folder.ID, domain.VisibilityPublic, nil, nil, "")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() by owner: unexpected error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestShareService_BrowsePublicFolder(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestShareService_BrowsePublicFolder_ContainmentCheck(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, sharedRoot.ID, domain.VisibilityPublic, nil, nil, "", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, sharedRoot.ID, domain.VisibilityPublic, nil, nil, "")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestShareService_BrowsePublicFolder_PasswordGated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "secret", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "secret")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestShareService_RedeemFolderFileDownload(t *testing.T) {
 		t.Fatalf("Upload() error: %v", err)
 	}
 
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestShareService_RedeemFolderShareZip(t *testing.T) {
 	}
 
 	one := 1
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, &one, "", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, &one, "")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestShareService_RedeemFolderShareZip_WrongPasswordRejectedBeforeStreaming(
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
-	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "secret", "")
+	share, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "secret")
 	if err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestShareService_ListSharesForFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
-	if _, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, "", ""); err != nil {
+	if _, err := shareSvc.CreateFolderShareLink(ctx, owner, root.ID, domain.VisibilityPublic, nil, nil, ""); err != nil {
 		t.Fatalf("CreateFolderShareLink() error: %v", err)
 	}
 

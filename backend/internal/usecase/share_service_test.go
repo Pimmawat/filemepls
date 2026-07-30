@@ -39,107 +39,18 @@ func TestShareService_CreateShareLink_EnforcesOwnership(t *testing.T) {
 	svc, _, owner, f := newTestShareService(t)
 	other := uuid.New()
 
-	if _, err := svc.CreateShareLink(context.Background(), owner, f.ID, domain.VisibilityPublic, nil, nil, "", ""); err != nil {
+	if _, err := svc.CreateShareLink(context.Background(), owner, f.ID, domain.VisibilityPublic, nil, nil, ""); err != nil {
 		t.Fatalf("CreateShareLink() by owner: unexpected error: %v", err)
 	}
-	if _, err := svc.CreateShareLink(context.Background(), other, f.ID, domain.VisibilityPublic, nil, nil, "", ""); !errors.Is(err, domain.ErrNotOwner) {
+	if _, err := svc.CreateShareLink(context.Background(), other, f.ID, domain.VisibilityPublic, nil, nil, ""); !errors.Is(err, domain.ErrNotOwner) {
 		t.Errorf("got %v, want %v", err, domain.ErrNotOwner)
-	}
-}
-
-func TestShareService_CreateShareLink_DeduplicatesIdenticalSettings(t *testing.T) {
-	svc, _, owner, f := newTestShareService(t)
-	ctx := context.Background()
-
-	first, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("first: %v", err)
-	}
-	second, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("second: %v", err)
-	}
-	if first.ID != second.ID || first.Token != second.Token {
-		t.Errorf("identical settings should return the same link, got %s and %s", first.ID, second.ID)
-	}
-}
-
-func TestShareService_CreateShareLink_DifferentSettingsCreatesNew(t *testing.T) {
-	svc, _, owner, f := newTestShareService(t)
-	ctx := context.Background()
-
-	pub, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "")
-	if err != nil {
-		t.Fatalf("pub: %v", err)
-	}
-	withPassword, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret", "")
-	if err != nil {
-		t.Fatalf("withPassword: %v", err)
-	}
-	if pub.ID == withPassword.ID {
-		t.Error("differing settings (password) should create a distinct link")
-	}
-}
-
-func TestShareService_CreateShareLink_CustomAliasIsIdempotent(t *testing.T) {
-	svc, _, owner, f := newTestShareService(t)
-	ctx := context.Background()
-
-	share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "my-report")
-	if err != nil {
-		t.Fatalf("alias: %v", err)
-	}
-	if share.Token != "my-report" {
-		t.Errorf("token = %q, want alias %q", share.Token, "my-report")
-	}
-	again, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "my-report")
-	if err != nil {
-		t.Fatalf("alias re-submit: %v", err)
-	}
-	if again.ID != share.ID {
-		t.Error("re-submitting the same alias for the same file should return the same link")
-	}
-}
-
-func TestShareService_CreateShareLink_InvalidAlias(t *testing.T) {
-	svc, _, owner, f := newTestShareService(t)
-	_, err := svc.CreateShareLink(context.Background(), owner, f.ID, domain.VisibilityPublic, nil, nil, "", "ab")
-	if !errors.Is(err, domain.ErrInvalidShareAlias) {
-		t.Errorf("got %v, want ErrInvalidShareAlias", err)
-	}
-}
-
-func TestShareService_CreateShareLink_AliasTakenByAnotherTarget(t *testing.T) {
-	ctx := context.Background()
-	fileSvc, _, _, _ := newTestFileService()
-	owner := uuid.New()
-	f1, err := fileSvc.Upload(ctx, owner, "text/plain", "a.txt", nil, strings.NewReader("aaa"))
-	if err != nil {
-		t.Fatalf("upload f1: %v", err)
-	}
-	f2, err := fileSvc.Upload(ctx, owner, "text/plain", "b.txt", nil, strings.NewReader("bbb"))
-	if err != nil {
-		t.Fatalf("upload f2: %v", err)
-	}
-
-	files := newFakeFileRepository()
-	files.byID[f1.ID] = f1
-	files.byID[f2.ID] = f2
-	svc := NewShareService(files, newFakeFolderRepository(), newFakeShareRepository(), newFakeStorage(), fakePasswordHasher{})
-
-	if _, err := svc.CreateShareLink(ctx, owner, f1.ID, domain.VisibilityPublic, nil, nil, "", "shared-name"); err != nil {
-		t.Fatalf("first claim: %v", err)
-	}
-	_, err = svc.CreateShareLink(ctx, owner, f2.ID, domain.VisibilityPublic, nil, nil, "", "shared-name")
-	if !errors.Is(err, domain.ErrShareAliasTaken) {
-		t.Errorf("got %v, want ErrShareAliasTaken", err)
 	}
 }
 
 func TestShareService_CreateShareLink_HashesPassword(t *testing.T) {
 	svc, _, owner, f := newTestShareService(t)
 
-	share, err := svc.CreateShareLink(context.Background(), owner, f.ID, domain.VisibilityUnlisted, nil, nil, "secret", "")
+	share, err := svc.CreateShareLink(context.Background(), owner, f.ID, domain.VisibilityUnlisted, nil, nil, "secret")
 	if err != nil {
 		t.Fatalf("CreateShareLink() error: %v", err)
 	}
@@ -156,7 +67,7 @@ func TestShareService_GetPublicShare_States(t *testing.T) {
 	svc, _, owner, f := newTestShareService(t)
 
 	t.Run("ok", func(t *testing.T) {
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -171,7 +82,7 @@ func TestShareService_GetPublicShare_States(t *testing.T) {
 
 	t.Run("expired", func(t *testing.T) {
 		past := time.Now().Add(-time.Hour)
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, &past, nil, "", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, &past, nil, "")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -183,7 +94,7 @@ func TestShareService_GetPublicShare_States(t *testing.T) {
 
 	t.Run("limit reached", func(t *testing.T) {
 		zero := 0
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, &zero, "", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, &zero, "")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -206,7 +117,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 	svc, _, owner, f := newTestShareService(t)
 
 	t.Run("no password required", func(t *testing.T) {
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -225,7 +136,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 	})
 
 	t.Run("wrong password rejected", func(t *testing.T) {
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -236,7 +147,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 	})
 
 	t.Run("missing password rejected", func(t *testing.T) {
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -247,7 +158,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 	})
 
 	t.Run("correct password accepted and increments count", func(t *testing.T) {
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "secret")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -265,7 +176,7 @@ func TestShareService_RedeemShareDownload(t *testing.T) {
 
 	t.Run("download limit enforced across redemptions", func(t *testing.T) {
 		one := 1
-		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, &one, "", "")
+		share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, &one, "")
 		if err != nil {
 			t.Fatalf("CreateShareLink() error: %v", err)
 		}
@@ -287,7 +198,7 @@ func TestShareService_RevokeShareLink(t *testing.T) {
 	svc, _, owner, f := newTestShareService(t)
 	other := uuid.New()
 
-	share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", "")
+	share, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "")
 	if err != nil {
 		t.Fatalf("CreateShareLink() error: %v", err)
 	}
@@ -308,10 +219,10 @@ func TestShareService_ListSharesForFile(t *testing.T) {
 	svc, _, owner, f := newTestShareService(t)
 	other := uuid.New()
 
-	if _, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, "", ""); err != nil {
+	if _, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityPublic, nil, nil, ""); err != nil {
 		t.Fatalf("CreateShareLink() error: %v", err)
 	}
-	if _, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityUnlisted, nil, nil, "secret", ""); err != nil {
+	if _, err := svc.CreateShareLink(ctx, owner, f.ID, domain.VisibilityUnlisted, nil, nil, "secret"); err != nil {
 		t.Fatalf("CreateShareLink() error: %v", err)
 	}
 

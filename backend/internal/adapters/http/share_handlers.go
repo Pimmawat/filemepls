@@ -27,7 +27,7 @@ func CreateShareHandler(shares *usecase.ShareService) gin.HandlerFunc {
 		}
 
 		visibility := domain.Visibility(req.Visibility)
-		share, err := shares.CreateShareLink(c.Request.Context(), userIDFromContext(c), fileID, visibility, req.ExpiresAt, req.MaxDownloads, req.Password, req.Alias)
+		share, err := shares.CreateShareLink(c.Request.Context(), userIDFromContext(c), fileID, visibility, req.ExpiresAt, req.MaxDownloads, req.Password)
 		if err != nil {
 			respondErr(c, err)
 			return
@@ -70,7 +70,7 @@ func CreateFolderShareHandler(shares *usecase.ShareService) gin.HandlerFunc {
 		}
 
 		visibility := domain.Visibility(req.Visibility)
-		share, err := shares.CreateFolderShareLink(c.Request.Context(), userIDFromContext(c), folderID, visibility, req.ExpiresAt, req.MaxDownloads, req.Password, req.Alias)
+		share, err := shares.CreateFolderShareLink(c.Request.Context(), userIDFromContext(c), folderID, visibility, req.ExpiresAt, req.MaxDownloads, req.Password)
 		if err != nil {
 			respondErr(c, err)
 			return

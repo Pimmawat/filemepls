@@ -1,17 +1,18 @@
 "use client";
 
+import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { Moon, Sun } from "lucide-react";
 
-import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 
-// Toggle light/dark. The visible icon is driven purely by the `.dark` class on
-// <html> via CSS, so there's no hydration mismatch and no client-only state:
-// a moon in light mode, a sun in dark mode.
+// Toggle between light and dark. The visible icon is driven purely by the
+// `.dark` class on <html> (which next-themes sets before first paint), so
+// there's no hydration mismatch and no client-only mount state — the CSS
+// shows the moon in light mode and the sun in dark mode.
 export function ThemeToggle() {
   const t = useTranslations("ThemeToggle");
-  const { toggle } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <Button
@@ -19,7 +20,7 @@ export function ThemeToggle() {
       size="icon-sm"
       aria-label={t("label")}
       title={t("label")}
-      onClick={toggle}
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
       <Moon className="size-4 dark:hidden" />
       <Sun className="hidden size-4 dark:block" />

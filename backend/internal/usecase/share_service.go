@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -46,20 +45,9 @@ func hashPasswordIfSet(hasher ports.PasswordHasher, plainPassword string) (*stri
 	return &hash, nil
 }
 
-// shareParams bundles the user-configurable settings of a share link, used
-// both to create one and to detect an existing duplicate.
-type shareParams struct {
-	visibility    domain.Visibility
-	expiresAt     *time.Time
-	maxDownloads  *int
-	plainPassword string
-}
-
-// CreateShareLink requires ownerID to own fileID. If alias is non-empty it is
-// used as the (guessable) custom token, rejected as taken if already in use by
-// a different target. With no alias, a repeated request with identical
-// settings returns the existing link instead of creating a duplicate.
-func (s *ShareService) CreateShareLink(ctx context.Context, ownerID, fileID uuid.UUID, visibility domain.Visibility, expiresAt *time.Time, maxDownloads *int, plainPassword, alias string) (*domain.ShareLink, error) {
+// CreateShareLink requires ownerID to own fileID. If plainPassword is
+// non-empty, it's hashed via the PasswordHasher port before storing.
+func (s *ShareService) CreateShareLink(ctx context.Context, ownerID, fileID uuid.UUID, visibility domain.Visibility, expiresAt *time.Time, maxDownloads *int, plainPassword string) (*domain.ShareLink, error) {
 	f, err := s.files.FindByID(ctx, fileID)
 	if err != nil {
 		return nil, err
@@ -68,38 +56,29 @@ func (s *ShareService) CreateShareLink(ctx context.Context, ownerID, fileID uuid
 		return nil, err
 	}
 
-	p := shareParams{visibility: visibility, expiresAt: expiresAt, maxDownloads: maxDownloads, plainPassword: plainPassword}
-	build := func(token string) (*domain.ShareLink, error) {
-		return domain.NewShareLinkForFile(token, fileID, visibility, expiresAt, maxDownloads)
-	}
-
-	if alias != "" {
-		existing, err := s.resolveAlias(ctx, alias, func(sh *domain.ShareLink) bool {
-			return sh.TargetType == domain.ShareTargetFile && sh.FileID != nil && *sh.FileID == fileID
-		})
-		if err != nil || existing != nil {
-			return existing, err
-		}
-		return s.persistShare(ctx, build, alias, p)
-	}
-
-	list, err := s.shares.ListByFile(ctx, fileID)
-	if err != nil {
-		return nil, fmt.Errorf("usecase: list shares: %w", err)
-	}
-	if dup := s.findDuplicate(list, p); dup != nil {
-		return dup, nil
-	}
 	token, err := newToken()
 	if err != nil {
 		return nil, fmt.Errorf("usecase: generate token: %w", err)
 	}
-	return s.persistShare(ctx, build, token, p)
+	share, err := domain.NewShareLinkForFile(token, fileID, visibility, expiresAt, maxDownloads)
+	if err != nil {
+		return nil, err
+	}
+	passwordHash, err := hashPasswordIfSet(s.hasher, plainPassword)
+	if err != nil {
+		return nil, err
+	}
+	share.PasswordHash = passwordHash
+
+	if err := s.shares.Save(ctx, share); err != nil {
+		return nil, fmt.Errorf("usecase: save share link: %w", err)
+	}
+	return share, nil
 }
 
-// CreateFolderShareLink is the folder counterpart of CreateShareLink, with the
-// same alias / de-duplication semantics.
-func (s *ShareService) CreateFolderShareLink(ctx context.Context, ownerID, folderID uuid.UUID, visibility domain.Visibility, expiresAt *time.Time, maxDownloads *int, plainPassword, alias string) (*domain.ShareLink, error) {
+// CreateFolderShareLink requires ownerID to own folderID. If plainPassword
+// is non-empty, it's hashed via the PasswordHasher port before storing.
+func (s *ShareService) CreateFolderShareLink(ctx context.Context, ownerID, folderID uuid.UUID, visibility domain.Visibility, expiresAt *time.Time, maxDownloads *int, plainPassword string) (*domain.ShareLink, error) {
 	f, err := s.folders.FindByID(ctx, folderID)
 	if err != nil {
 		return nil, err
@@ -108,122 +87,24 @@ func (s *ShareService) CreateFolderShareLink(ctx context.Context, ownerID, folde
 		return nil, err
 	}
 
-	p := shareParams{visibility: visibility, expiresAt: expiresAt, maxDownloads: maxDownloads, plainPassword: plainPassword}
-	build := func(token string) (*domain.ShareLink, error) {
-		return domain.NewShareLinkForFolder(token, folderID, visibility, expiresAt, maxDownloads)
-	}
-
-	if alias != "" {
-		existing, err := s.resolveAlias(ctx, alias, func(sh *domain.ShareLink) bool {
-			return sh.TargetType == domain.ShareTargetFolder && sh.FolderID != nil && *sh.FolderID == folderID
-		})
-		if err != nil || existing != nil {
-			return existing, err
-		}
-		return s.persistShare(ctx, build, alias, p)
-	}
-
-	list, err := s.shares.ListByFolder(ctx, folderID)
-	if err != nil {
-		return nil, fmt.Errorf("usecase: list shares: %w", err)
-	}
-	if dup := s.findDuplicate(list, p); dup != nil {
-		return dup, nil
-	}
 	token, err := newToken()
 	if err != nil {
 		return nil, fmt.Errorf("usecase: generate token: %w", err)
 	}
-	return s.persistShare(ctx, build, token, p)
-}
-
-// resolveAlias validates a custom alias and checks whether it is already in
-// use. Returns (existing, nil) when the alias already points at this same
-// target (idempotent re-submit), (nil, ErrShareAliasTaken) when it belongs to
-// something else, and (nil, nil) when it's free to claim.
-func (s *ShareService) resolveAlias(ctx context.Context, alias string, ownedByTarget func(*domain.ShareLink) bool) (*domain.ShareLink, error) {
-	if err := domain.ValidateShareAlias(alias); err != nil {
-		return nil, err
-	}
-	existing, err := s.shares.FindByToken(ctx, alias)
-	switch {
-	case err == nil:
-		if ownedByTarget(existing) {
-			return existing, nil
-		}
-		return nil, domain.ErrShareAliasTaken
-	case errors.Is(err, domain.ErrNotFound):
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("usecase: look up alias: %w", err)
-	}
-}
-
-// persistShare builds a share link with the given token, sets its password
-// hash, and saves it. A unique-violation on the token surfaces as
-// ErrShareAliasTaken (covers a race between resolveAlias and the insert).
-func (s *ShareService) persistShare(ctx context.Context, build func(token string) (*domain.ShareLink, error), token string, p shareParams) (*domain.ShareLink, error) {
-	share, err := build(token)
+	share, err := domain.NewShareLinkForFolder(token, folderID, visibility, expiresAt, maxDownloads)
 	if err != nil {
 		return nil, err
 	}
-	passwordHash, err := hashPasswordIfSet(s.hasher, p.plainPassword)
+	passwordHash, err := hashPasswordIfSet(s.hasher, plainPassword)
 	if err != nil {
 		return nil, err
 	}
 	share.PasswordHash = passwordHash
 
 	if err := s.shares.Save(ctx, share); err != nil {
-		if errors.Is(err, domain.ErrShareAliasTaken) {
-			return nil, domain.ErrShareAliasTaken
-		}
 		return nil, fmt.Errorf("usecase: save share link: %w", err)
 	}
 	return share, nil
-}
-
-// findDuplicate returns an existing, still-usable share link whose settings
-// exactly match p, or nil. This makes creating a link idempotent: clicking
-// "create" again with the same options hands back the same link instead of
-// piling up duplicates.
-func (s *ShareService) findDuplicate(list []*domain.ShareLink, p shareParams) *domain.ShareLink {
-	now := time.Now()
-	for _, sh := range list {
-		if sh.IsExpired(now) || sh.IsDownloadLimitReached() {
-			continue
-		}
-		if sh.Visibility != p.visibility {
-			continue
-		}
-		if !timePtrEqual(sh.ExpiresAt, p.expiresAt) || !intPtrEqual(sh.MaxDownloads, p.maxDownloads) {
-			continue
-		}
-		if p.plainPassword == "" {
-			if sh.PasswordHash != nil {
-				continue
-			}
-		} else {
-			if sh.PasswordHash == nil || s.hasher.Verify(*sh.PasswordHash, p.plainPassword) != nil {
-				continue
-			}
-		}
-		return sh
-	}
-	return nil
-}
-
-func timePtrEqual(a, b *time.Time) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return a.Equal(*b)
-}
-
-func intPtrEqual(a, b *int) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return *a == *b
 }
 
 // ListSharesForFile requires ownerID to own fileID, then returns all share
