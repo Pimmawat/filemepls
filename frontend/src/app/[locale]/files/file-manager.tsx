@@ -121,7 +121,6 @@ export function FileManager({
   // read by whichever drop target receives the drop) — simpler than
   // plumbing it through dataTransfer for every intermediate component.
   const draggedItemRef = useRef<{ type: "file" | "folder"; id: string } | null>(null);
-  const lastProgressRef = useRef<{ time: number; loaded: number }>({ time: 0, loaded: 0 });
 
   const renderUploadToast = useCallback(
     (fileName: string, progress: number, speed: number, current: number, total: number) => {
@@ -237,7 +236,10 @@ export function FileManager({
     const totalBytes = items.reduce((sum, item) => sum + item.file.size, 0);
     let completedBytes = 0;
     let currentSpeed = 0;
-    lastProgressRef.current = { time: Date.now(), loaded: 0 };
+    // Clock starts on the first progress event, not here: Date.now() in the
+    // function body is a purity error to the React compiler, and timing from
+    // before the request was even opened under-reports the rate anyway.
+    let lastProgress: { time: number; loaded: number } | null = null;
 
     for (let i = 0; i < items.length; i++) {
       const { file, parentId } = items[i];
@@ -256,11 +258,14 @@ export function FileManager({
             const overallLoaded = completedBytes + loaded;
             const pct = totalBytes > 0 ? Math.round((overallLoaded / totalBytes) * 100) : 0;
             const now = Date.now();
-            const prev = lastProgressRef.current;
-            const elapsed = (now - prev.time) / 1000;
-            if (elapsed >= 0.3) {
-              currentSpeed = (overallLoaded - prev.loaded) / elapsed;
-              lastProgressRef.current = { time: now, loaded: overallLoaded };
+            if (!lastProgress) {
+              lastProgress = { time: now, loaded: overallLoaded };
+            } else {
+              const elapsed = (now - lastProgress.time) / 1000;
+              if (elapsed >= 0.3) {
+                currentSpeed = (overallLoaded - lastProgress.loaded) / elapsed;
+                lastProgress = { time: now, loaded: overallLoaded };
+              }
             }
             renderUploadToast(file.name, pct, currentSpeed, i + 1, items.length);
           },

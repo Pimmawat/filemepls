@@ -179,9 +179,15 @@ BACKUP
                                 # /readyz, not /healthz: healthz answers 200 as soon as the HTTP
                                 # server is listening, so it would pass a build that cannot reach
                                 # Postgres at all - the failure this gate exists to catch.
+                                # `pm2 pid` first, then the probe: a process left over from an
+                                # older hand-rolled deploy answers this port just as happily as
+                                # the build's own binary, and curl cannot tell them apart. pm2
+                                # prints 0 for a stopped app, so a crash-looping release fails
+                                # here instead of being reported healthy.
                                 ok=0
                                 for i in $(seq 1 20); do
-                                    if curl -fsS "http://localhost:$BE_PORT/readyz" >/dev/null 2>&1; then
+                                    if sudo -H -u ubuntu pm2 pid "$BE_SERVICE" 2>/dev/null | grep -qE '^[1-9][0-9]*$' \
+                                       && curl -fsS "http://localhost:$BE_PORT/readyz" >/dev/null 2>&1; then
                                         ok=1; break
                                     fi
                                     sleep 2
@@ -298,6 +304,10 @@ BACKUP
                             if sudo -H -u ubuntu pm2 jlist 2>/dev/null | grep -q "pm_exec_path.:.$FE_DEPLOY_DIR/current/server.js"; then
                                 sudo -H -u ubuntu pm2 reload "$FE_SERVICE" --update-env
                             else
+                                # 'filemepls' is the hand-started app that served this site before
+                                # the pipeline existed. It holds $FE_PORT, so the new process cannot
+                                # bind while it lives. Harmless once it is gone.
+                                sudo -H -u ubuntu pm2 delete filemepls >/dev/null 2>&1 || true
                                 sudo -H -u ubuntu pm2 delete "$FE_SERVICE" >/dev/null 2>&1 || true
                                 sudo -H -u ubuntu env NODE_ENV=production PORT="$FE_PORT" HOSTNAME=127.0.0.1 pm2 start "$FE_DEPLOY_DIR/current/server.js" \
                                     --name "$FE_SERVICE" \
@@ -312,6 +322,9 @@ BACKUP
                             # a perfectly good 200 with every asset behind it 404ing.
                             ok=0
                             for i in $(seq 1 20); do
+                                if ! sudo -H -u ubuntu pm2 pid "$FE_SERVICE" 2>/dev/null | grep -qE '^[1-9][0-9]*$'; then
+                                    sleep 2; continue
+                                fi
                                 html="$(curl -fsS "http://127.0.0.1:$FE_PORT/th" 2>/dev/null || true)"
                                 css="$(printf '%s' "$html" | grep -o '/_next/static/[^"]*\\.css' | head -1 || true)"
                                 if [ -n "$css" ] && curl -fsS -o /dev/null "http://127.0.0.1:$FE_PORT$css" 2>/dev/null; then
