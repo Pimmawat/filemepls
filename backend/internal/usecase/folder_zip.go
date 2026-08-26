@@ -18,7 +18,7 @@ import (
 // the client (unlike folder names, which reject separators at creation), so
 // without this a name like `..\..\evil` or `../evil` would produce a
 // zip-slip entry that escapes the extraction directory on whoever unpacks the
-// archive — a real risk given the Windows deployment target. path.Base (not
+// archive — the risk is whatever OS unpacks it, not ours. path.Base (not
 // filepath.Base) is OS-independent, so backslashes are normalized first.
 func sanitizeZipName(name string) string {
 	name = strings.ReplaceAll(name, "\\", "/")

@@ -20,7 +20,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Self-contained server build (.next/standalone) for deploying outside
   // Vercel — only the files actually needed at runtime, not the full
-  // node_modules tree. Required for the native Windows service deployment.
+  // node_modules tree. `postbuild` copies public/ and .next/static into it;
+  // server.js does not do that itself.
   output: "standalone",
   // Don't advertise the framework/version in the X-Powered-By header.
   poweredByHeader: false,
