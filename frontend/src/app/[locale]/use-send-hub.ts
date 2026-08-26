@@ -6,20 +6,7 @@ import { SendSocket } from "@/lib/send/socket";
 import { ReceiveAssembler, sendFileOverChannel } from "@/lib/send/transfer";
 import type { FileMeta, PeerInfo, SignalPayload } from "@/lib/send/protocol";
 
-// No STUN/TURN on purpose: this feature is LAN-only. With no ICE servers
-// the browser can only gather host candidates (private/mDNS addresses),
-// which are unreachable from outside the local network — so a peer on
-// cellular or another network can never complete the WebRTC handshake,
-// it isn't just slow or relayed.
-const ICE_SERVERS: RTCIceServer[] = [];
-
-// Second line of defense alongside the empty ICE_SERVERS list: drop any
-// candidate that isn't a host (LAN) address, on both the sending and the
-// receiving side, so a peer that somehow gathered a server-reflexive or
-// relay candidate still can't pair with us across networks.
-function isLanCandidate(candidate: string | null | undefined): boolean {
-  return !!candidate && candidate.includes(" typ host");
-}
+const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
 export type OutgoingTransfer = {
   peerId: string;
@@ -117,7 +104,6 @@ export function useSendHub(wsUrl: string) {
           break;
         }
         case "ice": {
-          if (!isLanCandidate(payload.candidate.candidate)) return;
           const pc = peerConnections.current.get(fromId);
           if (!pc || !pc.remoteDescription) {
             const queue = pendingCandidates.current.get(fromId) ?? [];
@@ -159,8 +145,7 @@ export function useSendHub(wsUrl: string) {
       abortControllers.current.set(peer.id, controller);
 
       pc.onicecandidate = (e) => {
-        if (e.candidate && isLanCandidate(e.candidate.candidate))
-          socket.sendSignal(peer.id, { kind: "ice", candidate: e.candidate.toJSON() });
+        if (e.candidate) socket.sendSignal(peer.id, { kind: "ice", candidate: e.candidate.toJSON() });
       };
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
@@ -236,8 +221,7 @@ export function useSendHub(wsUrl: string) {
       peerConnections.current.set(offer.fromId, pc);
 
       pc.onicecandidate = (e) => {
-        if (e.candidate && isLanCandidate(e.candidate.candidate))
-          socket.sendSignal(offer.fromId, { kind: "ice", candidate: e.candidate.toJSON() });
+        if (e.candidate) socket.sendSignal(offer.fromId, { kind: "ice", candidate: e.candidate.toJSON() });
       };
 
       setIncoming({
