@@ -82,24 +82,45 @@ export function FileDetailsDialog({
         ) : failed || !file ? (
           <p className="text-sm text-muted-foreground">{t("loadFailed")}</p>
         ) : (
-          <dl className="flex flex-col gap-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">{t("name")}</dt>
-              <dd className="truncate text-right">{file.name}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">{t("size")}</dt>
-              <dd>{formatSize(file.size)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">{t("type")}</dt>
-              <dd>{file.mime}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">{t("created")}</dt>
-              <dd>{format.dateTime(new Date(file.createdAt), { dateStyle: "short", timeStyle: "medium" })}</dd>
-            </div>
-          </dl>
+          <>
+            {file.mime.startsWith("image/") && (
+              // ponytail: the download URL streams the bytes with the right
+              // Content-Type; Content-Disposition: attachment only applies to
+              // navigations, not to <img>/<video> subresource loads.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={api.downloadUrl(file.id)}
+                alt={file.name}
+                className="max-h-[60vh] w-full rounded-md bg-muted object-contain"
+              />
+            )}
+            {file.mime.startsWith("video/") && (
+              <video
+                src={api.downloadUrl(file.id)}
+                controls
+                preload="metadata"
+                className="max-h-[60vh] w-full rounded-md bg-muted"
+              />
+            )}
+            <dl className="flex flex-col gap-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{t("name")}</dt>
+                <dd className="truncate text-right">{file.name}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{t("size")}</dt>
+                <dd>{formatSize(file.size)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{t("type")}</dt>
+                <dd>{file.mime}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{t("created")}</dt>
+                <dd>{format.dateTime(new Date(file.createdAt), { dateStyle: "short", timeStyle: "medium" })}</dd>
+              </div>
+            </dl>
+          </>
         )}
 
         <DialogFooter>
