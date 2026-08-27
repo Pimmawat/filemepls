@@ -26,12 +26,14 @@ export function ShareFileDownload({
   token,
   file,
   requiresPassword,
+  previewable,
 }: {
   token: string;
   // null when a password is required: the server withholds file metadata
   // until the password is verified, so the name is only known afterward.
   file: FileMeta | null;
   requiresPassword: boolean;
+  previewable: boolean;
 }) {
   const t = useTranslations("SharePage");
   const router = useRouter();
@@ -63,6 +65,12 @@ export function ShareFileDownload({
 
   async function openPreview() {
     if (!file) return;
+    // Streaming URL when the link allows it (instant, seekable, cached);
+    // otherwise the buffered blob, which costs the link one download.
+    if (previewable) {
+      setPreview({ file, url: api.sharePreviewUrl(token, null) });
+      return;
+    }
     setPreviewing(true);
     try {
       const blob = await api.sharePreviewBlob(token, null, password);
@@ -77,7 +85,7 @@ export function ShareFileDownload({
   }
 
   function closePreview() {
-    if (preview) URL.revokeObjectURL(preview.url);
+    if (preview?.url.startsWith("blob:")) URL.revokeObjectURL(preview.url);
     setPreview(null);
   }
 

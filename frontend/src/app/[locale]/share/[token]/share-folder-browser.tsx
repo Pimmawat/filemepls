@@ -41,10 +41,12 @@ export function ShareFolderBrowser({
   token,
   initialBrowse,
   requiresPassword,
+  previewable,
 }: {
   token: string;
   initialBrowse: BrowseResult | null;
   requiresPassword: boolean;
+  previewable: boolean;
 }) {
   const t = useTranslations("SharePage");
   const tFiles = useTranslations("Files");
@@ -93,6 +95,12 @@ export function ShareFolderBrowser({
   }
 
   async function openPreview(file: FileMeta) {
+    // Streaming URL when the link allows it (instant, seekable, cached);
+    // otherwise the buffered blob, which costs the link one download.
+    if (previewable) {
+      setPreview({ file, url: api.sharePreviewUrl(token, file.id) });
+      return;
+    }
     setPreviewingId(file.id);
     try {
       const blob = await api.sharePreviewBlob(token, file.id, password);
@@ -107,7 +115,7 @@ export function ShareFolderBrowser({
   }
 
   function closePreview() {
-    if (preview) URL.revokeObjectURL(preview.url);
+    if (preview?.url.startsWith("blob:")) URL.revokeObjectURL(preview.url);
     setPreview(null);
   }
 

@@ -36,6 +36,7 @@ export default async function SharePage({ params }: Props) {
           token={token}
           file={state.file ?? null}
           requiresPassword={state.status === "needs_password"}
+          previewable={state.previewable ?? false}
         />
       )}
 
@@ -44,6 +45,7 @@ export default async function SharePage({ params }: Props) {
           token={token}
           initialBrowse={state.folder ?? null}
           requiresPassword={state.status === "needs_password"}
+          previewable={state.previewable ?? false}
         />
       )}
     </main>

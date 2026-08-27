@@ -130,7 +130,7 @@ func DownloadHandler(files *usecase.FileService) gin.HandlerFunc {
 		}
 
 		c.Header("Content-Disposition", contentDisposition(name))
-		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime)
+		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime, etagFor(id))
 	}
 }
 

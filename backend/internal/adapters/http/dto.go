@@ -159,6 +159,10 @@ type publicShareStateResponse struct {
 	TargetType string           `json:"targetType,omitempty"`
 	File       *fileDTO         `json:"file,omitempty"`
 	Folder     *browseResultDTO `json:"folder,omitempty"`
+	// Previewable reports that the share's media can be streamed inline from
+	// GET /api/share/:token/preview — see ShareService.PreviewShareStream for
+	// why a password or a download limit rules that out.
+	Previewable bool `json:"previewable"`
 }
 
 type createFolderRequest struct {

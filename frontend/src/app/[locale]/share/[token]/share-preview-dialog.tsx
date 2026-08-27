@@ -58,7 +58,12 @@ export function SharePreviewDialog({
               className="max-h-[60vh] w-full rounded-md bg-muted object-contain"
             />
           ) : (
-            <video src={preview.url} controls className="max-h-[60vh] w-full rounded-md bg-muted" />
+            <video
+              src={preview.url}
+              controls
+              preload="metadata"
+              className="max-h-[60vh] w-full rounded-md bg-muted"
+            />
           ))}
 
         <DialogFooter>

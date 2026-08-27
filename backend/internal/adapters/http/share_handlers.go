@@ -130,7 +130,11 @@ func PublicShareInfoHandler(shares *usecase.ShareService) gin.HandlerFunc {
 				c.JSON(http.StatusOK, publicShareStateResponse{Status: "needs_password", TargetType: string(share.TargetType)})
 				return
 			}
-			resp := publicShareStateResponse{Status: "ok", TargetType: string(share.TargetType)}
+			resp := publicShareStateResponse{
+				Status:      "ok",
+				TargetType:  string(share.TargetType),
+				Previewable: share.MaxDownloads == nil,
+			}
 			if share.TargetType == domain.ShareTargetFile {
 				dto := toFileDTO(f)
 				resp.File = &dto
@@ -235,12 +239,41 @@ func PublicShareDownloadHandler(shares *usecase.ShareService) gin.HandlerFunc {
 		}
 
 		c.Header("Content-Disposition", contentDisposition(file.Name))
-		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime)
+		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime, etagFor(file.ID))
 	}
 }
 
 // PublicFolderFileDownloadHandler downloads a single file living inside a
 // publicly shared folder, no auth required — the per-file counterpart to
+// SharePreviewHandler streams a shared file inline (no attachment
+// Content-Disposition) so an <img>/<video> can point its src straight at it:
+// Range requests then work, a video starts playing at once instead of after
+// the whole file is buffered client-side, and the response is cacheable.
+// Restricted to password-less, unlimited links and image/video content —
+// see ShareService.PreviewShareStream.
+func SharePreviewHandler(shares *usecase.ShareService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var fileID *uuid.UUID
+		if raw := c.Query("fileId"); raw != "" {
+			parsed, err := uuid.Parse(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
+				return
+			}
+			fileID = &parsed
+		}
+
+		stream, offset, contentLength, totalSize, partial, mime, file, err := shares.PreviewShareStream(
+			c.Request.Context(), c.Param("token"), fileID, c.GetHeader("Range"), optionalUserIDFromContext(c))
+		if err != nil {
+			respondErr(c, err)
+			return
+		}
+
+		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime, etagFor(file.ID))
+	}
+}
+
 // PublicFolderZipHandler. Same form-POST convention (password never in a
 // URL) and the same validate-before-respond ordering.
 func PublicFolderFileDownloadHandler(shares *usecase.ShareService) gin.HandlerFunc {
@@ -263,7 +296,7 @@ func PublicFolderFileDownloadHandler(shares *usecase.ShareService) gin.HandlerFu
 		}
 
 		c.Header("Content-Disposition", contentDisposition(file.Name))
-		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime)
+		writeDownloadResponse(c, stream, offset, contentLength, totalSize, partial, mime, etagFor(file.ID))
 	}
 }
 

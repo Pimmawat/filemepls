@@ -104,6 +104,10 @@ export type PublicShareState = {
   targetType?: "file" | "folder";
   file?: FileMeta;
   folder?: BrowseResult;
+  // Media in this share can be streamed inline from sharePreviewUrl. False
+  // for password-protected or download-limited links, which have to go
+  // through the buffered sharePreviewBlob path instead.
+  previewable?: boolean;
 };
 
 export type CreateShareLinkInput = {
@@ -291,6 +295,12 @@ export const api = {
   // a password-protected download streams as a native browser download,
   // never buffered through JS.
   shareDownloadUrl: (token: string) => `${API_BASE_URL}/api/share/${token}/download`,
+  // Streams a shared file for an inline <img>/<video> src: a plain GET, so
+  // the browser can Range-request and cache it (a video starts playing
+  // immediately instead of after a full buffered download). Only valid when
+  // the share reports previewable.
+  sharePreviewUrl: (token: string, fileId: string | null) =>
+    `${API_BASE_URL}/api/share/${token}/preview${fileId ? `?fileId=${fileId}` : ""}`,
   // Fetches a shared file's bytes for an inline preview. Same POST
   // redemption path as the download above (no GET variant exists — the
   // password must not travel in a URL), so a preview does count as one

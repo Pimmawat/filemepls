@@ -126,6 +126,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	r.GET("/api/share/:token", OptionalAuth(deps.Auth), PublicShareInfoHandler(deps.Shares))
 	r.POST("/api/share/:token/browse", OptionalAuth(deps.Auth), BrowsePublicFolderShareHandler(deps.Shares))
 	r.POST("/api/share/:token/verify-password", OptionalAuth(deps.Auth), VerifySharePasswordHandler(deps.Shares))
+	r.GET("/api/share/:token/preview", OptionalAuth(deps.Auth), SharePreviewHandler(deps.Shares))
 	r.POST("/api/share/:token/download", OptionalAuth(deps.Auth), PublicShareDownloadHandler(deps.Shares))
 	r.POST("/api/share/:token/zip", OptionalAuth(deps.Auth), PublicFolderZipHandler(deps.Shares))
 	r.POST("/api/share/:token/files/:fileId/download", OptionalAuth(deps.Auth), PublicFolderFileDownloadHandler(deps.Shares))

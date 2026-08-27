@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -240,6 +241,80 @@ func (s *ShareService) RedeemShareDownload(ctx context.Context, token, plainPass
 		cl = total - off
 	}
 	return rc, off, cl, total, isPartial, f.Mime, f, nil
+}
+
+// PreviewShareStream streams a shared file for an inline <img>/<video>
+// preview: same access rules as a redemption, minus the redemption itself.
+// A media element issues its own Range requests as playback seeks around,
+// so counting them as downloads would be meaningless — which is exactly why
+// this is limited to links with no download limit. Password-protected links
+// are out too: a GET has nowhere safe to carry a password. Both keep using
+// the POST redemption path (buffered by the frontend into a blob), which
+// costs the link exactly one download.
+//
+// Only image/video are streamable inline; anything else (HTML above all)
+// would be a stored-XSS vector once served without an attachment
+// Content-Disposition. SVG is excluded for the same reason — it scripts.
+func (s *ShareService) PreviewShareStream(ctx context.Context, token string, fileID *uuid.UUID, rangeHeader string, requesterID uuid.UUID) (stream io.ReadCloser, offset, contentLength, totalSize int64, partial bool, mime string, file *domain.File, err error) {
+	share, f, folder, err := s.GetPublicShare(ctx, token, requesterID)
+	if err != nil {
+		return nil, 0, 0, 0, false, "", nil, err
+	}
+	if share.RequiresPassword() || share.MaxDownloads != nil {
+		return nil, 0, 0, 0, false, "", nil, domain.ErrNotFound
+	}
+
+	if share.TargetType == domain.ShareTargetFolder {
+		if fileID == nil {
+			return nil, 0, 0, 0, false, "", nil, domain.ErrNotFound
+		}
+		f, err = s.files.FindByID(ctx, *fileID)
+		if err != nil {
+			return nil, 0, 0, 0, false, "", nil, err
+		}
+		if f.ParentID == nil {
+			return nil, 0, 0, 0, false, "", nil, domain.ErrNotFound
+		}
+		within, err := isWithinShare(ctx, s.folders, *f.ParentID, folder.ID)
+		if err != nil {
+			return nil, 0, 0, 0, false, "", nil, err
+		}
+		if !within {
+			return nil, 0, 0, 0, false, "", nil, domain.ErrNotFound
+		}
+	}
+
+	if !inlinePreviewable(f.Mime) {
+		return nil, 0, 0, 0, false, "", nil, domain.ErrNotFound
+	}
+
+	off, length, isPartial, err := parseRange(rangeHeader, f.Size)
+	if err != nil {
+		return nil, 0, 0, 0, false, "", nil, err
+	}
+	key, err := f.StorageKey()
+	if err != nil {
+		return nil, 0, 0, 0, false, "", nil, err
+	}
+	rc, total, err := s.storage.GetRange(ctx, key, off, length)
+	if err != nil {
+		return nil, 0, 0, 0, false, "", nil, err
+	}
+
+	cl := length
+	if cl <= 0 {
+		cl = total - off
+	}
+	return rc, off, cl, total, isPartial, f.Mime, f, nil
+}
+
+// inlinePreviewable reports whether a mime type is safe to serve inline
+// (see PreviewShareStream).
+func inlinePreviewable(mime string) bool {
+	if strings.HasPrefix(mime, "video/") {
+		return true
+	}
+	return strings.HasPrefix(mime, "image/") && !strings.HasPrefix(mime, "image/svg")
 }
 
 // RedeemFolderFileDownload downloads a single file living inside a
