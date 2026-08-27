@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError, type FileMeta } from "@/lib/api";
+import { isPreviewable, SharePreviewDialog } from "./share-preview-dialog";
 
 // The actual download is a real <form method="POST"> (native streaming, no
 // JS buffering of the file). The risk that motivated this component: if
@@ -37,6 +38,8 @@ export function ShareFileDownload({
   const [password, setPassword] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(!requiresPassword);
+  const [preview, setPreview] = useState<{ file: FileMeta; url: string } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   // Returns false (and shows the right toast) if the link is now expired or
@@ -56,6 +59,26 @@ export function ShareFileDownload({
       return false;
     }
     return true;
+  }
+
+  async function openPreview() {
+    if (!file) return;
+    setPreviewing(true);
+    try {
+      const blob = await api.sharePreviewBlob(token, null, password);
+      setPreview({ file, url: URL.createObjectURL(blob) });
+    } catch (err) {
+      toast.error(t("previewFailed"), {
+        description: err instanceof ApiError ? err.message : undefined,
+      });
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  function closePreview() {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -114,6 +137,15 @@ export function ShareFileDownload({
           {verifying ? t("verifying") : t("downloadButton")}
         </Button>
       </form>
+      {/* Only for links without a password: the server withholds the
+          metadata until one is verified, so there's no mime/size to decide
+          previewability on. */}
+      {verified && file && isPreviewable(file) && (
+        <Button variant="outline" disabled={previewing} onClick={openPreview}>
+          {previewing ? t("verifying") : t("previewButton")}
+        </Button>
+      )}
+      <SharePreviewDialog preview={preview} onOpenChange={(open) => !open && closePreview()} />
     </>
   );
 }

@@ -291,6 +291,24 @@ export const api = {
   // a password-protected download streams as a native browser download,
   // never buffered through JS.
   shareDownloadUrl: (token: string) => `${API_BASE_URL}/api/share/${token}/download`,
+  // Fetches a shared file's bytes for an inline preview. Same POST
+  // redemption path as the download above (no GET variant exists — the
+  // password must not travel in a URL), so a preview does count as one
+  // download against the link's limit; the preview dialog then offers that
+  // very blob for saving, so previewing and downloading stays one
+  // redemption in total. fileId is null for a single-file share, set for a
+  // file inside a shared folder.
+  sharePreviewBlob: (token: string, fileId: string | null, password?: string) =>
+    apiFetch(
+      fileId
+        ? `/api/share/${token}/files/${fileId}/download`
+        : `/api/share/${token}/download`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      },
+    ).then((r) => r.blob()),
   shareZipUrl: (token: string) => `${API_BASE_URL}/api/share/${token}/zip`,
   shareFolderFileDownloadUrl: (token: string, fileId: string) =>
     `${API_BASE_URL}/api/share/${token}/files/${fileId}/download`,

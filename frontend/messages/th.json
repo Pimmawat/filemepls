@@ -136,7 +136,10 @@
     "verifying": "กำลังตรวจสอบ...",
     "wrongPassword": "รหัสผ่านไม่ถูกต้อง",
     "emptySharedFolder": "โฟลเดอร์นี้ยังไม่มีไฟล์",
-    "enterPassword": "ใส่รหัสผ่าน"
+    "enterPassword": "ใส่รหัสผ่าน",
+    "previewButton": "ดูตัวอย่าง",
+    "previewFailed": "โหลดตัวอย่างไม่สำเร็จ",
+    "close": "ปิด"
   },
   "Breadcrumb": {
     "home": "หน้าหลัก"

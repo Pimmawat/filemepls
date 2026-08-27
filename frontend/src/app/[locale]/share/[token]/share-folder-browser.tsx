@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { Folder } from "lucide-react";
+import { Eye, Folder } from "lucide-react";
 import { toast } from "sonner";
 
 import { Breadcrumb } from "@/components/breadcrumb";
@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, ApiError, type BrowseResult, type FileMeta, type FolderMeta } from "@/lib/api";
+import { isPreviewable, SharePreviewDialog } from "./share-preview-dialog";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -54,6 +55,8 @@ export function ShareFolderBrowser({
   const [verifying, setVerifying] = useState(false);
   const [browse, setBrowse] = useState<BrowseResult | null>(initialBrowse);
   const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<{ file: FileMeta; url: string } | null>(null);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   async function handleUnlock(e: React.FormEvent) {
     e.preventDefault();
@@ -87,6 +90,25 @@ export function ShareFolderBrowser({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function openPreview(file: FileMeta) {
+    setPreviewingId(file.id);
+    try {
+      const blob = await api.sharePreviewBlob(token, file.id, password);
+      setPreview({ file, url: URL.createObjectURL(blob) });
+    } catch (err) {
+      toast.error(t("previewFailed"), {
+        description: err instanceof ApiError ? err.message : undefined,
+      });
+    } finally {
+      setPreviewingId(null);
+    }
+  }
+
+  function closePreview() {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
   }
 
   function downloadZip(folder: FolderMeta | null) {
@@ -196,6 +218,18 @@ export function ShareFolderBrowser({
                   {format.dateTime(new Date(file.createdAt), { dateStyle: "short", timeStyle: "medium" })}
                 </TableCell>
                 <TableCell className="text-right">
+                  {isPreviewable(file) && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      title={t("previewButton")}
+                      aria-label={t("previewButton")}
+                      disabled={previewingId === file.id}
+                      onClick={() => openPreview(file)}
+                    >
+                      <Eye />
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => downloadFile(file)}>
                     {t("downloadButton")}
                   </Button>
@@ -205,6 +239,8 @@ export function ShareFolderBrowser({
           </TableBody>
         </Table>
       )}
+
+      <SharePreviewDialog preview={preview} onOpenChange={(open) => !open && closePreview()} />
     </div>
   );
 }

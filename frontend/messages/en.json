@@ -136,7 +136,10 @@
     "verifying": "Verifying...",
     "wrongPassword": "Incorrect password",
     "emptySharedFolder": "This folder is empty.",
-    "enterPassword": "Enter password"
+    "enterPassword": "Enter password",
+    "previewButton": "Preview",
+    "previewFailed": "Could not load preview",
+    "close": "Close"
   },
   "Breadcrumb": {
     "home": "Home"
