@@ -1,4 +1,5 @@
 import type { FileMeta } from "./protocol";
+import type { SendSocket } from "./socket";
 
 export const CHUNK_SIZE = 256 * 1024;
 // Pause sending once this many bytes are buffered but not yet handed to
@@ -29,22 +30,73 @@ const READ_BLOCK_SIZE = 4 * 1024 * 1024; // 4MB
 // to ~10 updates/sec keeps the progress bar smooth without flooding React.
 const PROGRESS_THROTTLE_MS = 100;
 
-// Streams `file` over an already-open RTCDataChannel: one JSON header
-// message, then raw ArrayBuffer chunks, then a JSON {eof:true} sentinel.
-// The receiving end (ReceiveAssembler) mirrors this exact framing.
-export async function sendFileOverChannel(
-  channel: RTCDataChannel,
+// Transport is the little that the send loop below actually needs from a
+// connection: hand it bytes, tell it how much is queued, and wait until the
+// queue drains. A WebRTC DataChannel is one; the signaling socket, used as a
+// relay when the two browsers cannot reach each other directly, is another.
+export type Transport = {
+  send(data: ArrayBuffer | string): void;
+  bufferedAmount(): number;
+  waitDrain(signal: AbortSignal): Promise<void>;
+};
+
+export function dataChannelTransport(channel: RTCDataChannel): Transport {
+  channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
+  return {
+    send: (data) => (typeof data === "string" ? channel.send(data) : channel.send(data)),
+    bufferedAmount: () => channel.bufferedAmount,
+    waitDrain: (signal) => waitForBufferedAmountLow(channel, signal),
+  };
+}
+
+// relayTransport pushes the same framing through the signaling socket, so the
+// bytes travel browser -> server -> browser. Slower and it costs the server
+// bandwidth, but it needs nothing beyond the HTTPS connection both peers
+// already have — which is the whole point: it works from behind the symmetric
+// NATs and firewalls that WebRTC hole punching cannot get through.
+export function relayTransport(socket: SendSocket, peerId: string): Transport {
+  return {
+    send: (data) => socket.sendRelay(peerId, data),
+    bufferedAmount: () => socket.bufferedAmount,
+    waitDrain: (signal) => pollDrain(socket, signal),
+  };
+}
+
+// A WebSocket has no "bufferedamountlow" event, so draining has to be polled.
+// 50ms is far shorter than the time it takes to push 1MB over any link worth
+// using, so this never becomes the bottleneck.
+function pollDrain(socket: SendSocket, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setInterval(() => {
+      if (signal.aborted) {
+        clearInterval(timer);
+        reject(new Error("transfer aborted"));
+        return;
+      }
+      if (socket.bufferedAmount <= BUFFERED_AMOUNT_LOW_THRESHOLD) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 50);
+  });
+}
+
+// Streams `file` over an already-open transport: one JSON header message,
+// then raw ArrayBuffer chunks, then a JSON {eof:true} sentinel. The receiving
+// end (ReceiveAssembler) mirrors this exact framing, whichever transport
+// carried it.
+export async function sendFileOver(
+  transport: Transport,
   file: File,
   onProgress: (sentBytes: number) => void,
   signal: AbortSignal,
 ): Promise<void> {
-  channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
   const meta: FileMeta = {
     name: file.name,
     size: file.size,
     mime: file.type || "application/octet-stream",
   };
-  channel.send(JSON.stringify({ header: meta }));
+  transport.send(JSON.stringify({ header: meta }));
 
   let sent = 0;
   let lastProgressAt = 0;
@@ -61,11 +113,11 @@ export async function sendFileOverChannel(
     let blockPos = 0;
     while (blockPos < block.byteLength) {
       if (signal.aborted) throw new Error("transfer aborted");
-      if (channel.bufferedAmount > BUFFERED_AMOUNT_LOW_THRESHOLD) {
-        await waitForBufferedAmountLow(channel, signal);
+      if (transport.bufferedAmount() > BUFFERED_AMOUNT_LOW_THRESHOLD) {
+        await transport.waitDrain(signal);
       }
       const chunkEnd = Math.min(blockPos + CHUNK_SIZE, block.byteLength);
-      channel.send(block.slice(blockPos, chunkEnd));
+      transport.send(block.slice(blockPos, chunkEnd));
       sent += chunkEnd - blockPos;
       blockPos = chunkEnd;
 
@@ -76,7 +128,7 @@ export async function sendFileOverChannel(
       }
     }
   }
-  channel.send(JSON.stringify({ eof: true }));
+  transport.send(JSON.stringify({ eof: true }));
 }
 
 function waitForBufferedAmountLow(channel: RTCDataChannel, signal: AbortSignal): Promise<void> {

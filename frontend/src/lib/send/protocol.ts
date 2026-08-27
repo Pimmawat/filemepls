@@ -12,7 +12,11 @@ export type SignalPayload =
   | { kind: "offer"; sdp: string; file: FileMeta }
   | { kind: "answer"; sdp: string }
   | { kind: "ice"; candidate: RTCIceCandidateInit }
-  | { kind: "reject" };
+  | { kind: "reject" }
+  // Sent by the receiver once the file is fully assembled, so the sender knows
+  // it is safe to tear down. Goes over signaling rather than the data channel
+  // because a relayed transfer has no data channel to answer on.
+  | { kind: "ack" };
 
 export type ServerMessage =
   | { type: "hello"; selfId: string; selfName: string }

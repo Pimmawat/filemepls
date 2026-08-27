@@ -7,10 +7,15 @@ import (
 
 type fakeClient struct {
 	received []Message
+	frames   [][]byte
 }
 
 func (c *fakeClient) Send(m Message) {
 	c.received = append(c.received, m)
+}
+
+func (c *fakeClient) SendBinary(frame []byte) {
+	c.frames = append(c.frames, frame)
 }
 
 func (c *fakeClient) last() Message {
@@ -111,5 +116,50 @@ func TestHub_Relay_FromNameStamped(t *testing.T) {
 
 	if got := b.last().FromName; got != nameA {
 		t.Errorf("FromName = %q, want %q", got, nameA)
+	}
+}
+
+func TestHub_RelayBinary_StampsSenderAndForwardsPayload(t *testing.T) {
+	h := New()
+	from, _ := h.Join(&fakeClient{})
+	target := &fakeClient{}
+	to, _ := h.Join(target)
+
+	if !h.RelayBinary(from, to, []byte("file bytes")) {
+		t.Fatal("RelayBinary to a connected peer returned false")
+	}
+	if len(target.frames) != 1 {
+		t.Fatalf("target frames = %d, want 1", len(target.frames))
+	}
+
+	frame := target.frames[0]
+	if len(frame) <= IDLen {
+		t.Fatalf("frame is %d bytes, want more than the %d-byte ID prefix", len(frame), IDLen)
+	}
+	// The receiver reads the sender's ID straight off the front of the frame,
+	// so a wrong prefix length silently misroutes every chunk.
+	if got := string(frame[:IDLen]); got != from {
+		t.Errorf("frame ID prefix = %q, want %q", got, from)
+	}
+	if got := string(frame[IDLen:]); got != "file bytes" {
+		t.Errorf("frame payload = %q, want %q", got, "file bytes")
+	}
+}
+
+func TestHub_RelayBinary_UnknownPeer(t *testing.T) {
+	h := New()
+	from, _ := h.Join(&fakeClient{})
+
+	if h.RelayBinary(from, "not-a-peer", []byte("x")) {
+		t.Error("RelayBinary to a disconnected peer returned true")
+	}
+}
+
+func TestHub_NewIDLength(t *testing.T) {
+	// Both ends slice relay frames at exactly IDLen; if newID ever mints a
+	// different width the prefix and the payload swap places.
+	id, _ := New().Join(&fakeClient{})
+	if len(id) != IDLen {
+		t.Errorf("newID length = %d, want IDLen (%d)", len(id), IDLen)
 	}
 }

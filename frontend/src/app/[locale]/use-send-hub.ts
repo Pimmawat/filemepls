@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SendSocket } from "@/lib/send/socket";
-import { ReceiveAssembler, sendFileOverChannel } from "@/lib/send/transfer";
+import {
+  ReceiveAssembler,
+  dataChannelTransport,
+  relayTransport,
+  sendFileOver,
+  type Transport,
+} from "@/lib/send/transfer";
 import type { FileMeta, PeerInfo, SignalPayload } from "@/lib/send/protocol";
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -57,6 +63,9 @@ export function useSendHub(wsUrl: string) {
   const peerConnections = useRef(new Map<string, RTCPeerConnection>());
   const pendingCandidates = useRef(new Map<string, RTCIceCandidateInit[]>());
   const abortControllers = useRef(new Map<string, AbortController>());
+  // Keyed by sender ID so relayed chunks, which arrive on the shared socket
+  // rather than on a per-peer data channel, can be routed to the right one.
+  const assemblers = useRef(new Map<string, ReceiveAssembler>());
 
   const patchOutgoing = useCallback((peerId: string, patch: Partial<OutgoingTransfer>) => {
     setOutgoing((prev) => {
@@ -74,6 +83,7 @@ export function useSendHub(wsUrl: string) {
     pendingCandidates.current.delete(peerId);
     abortControllers.current.get(peerId)?.abort();
     abortControllers.current.delete(peerId);
+    assemblers.current.delete(peerId);
   }, []);
 
   const flushCandidates = useCallback((peerId: string, pc: RTCPeerConnection) => {
@@ -89,6 +99,7 @@ export function useSendHub(wsUrl: string) {
 
     socket.onHello = (selfId, selfName) => setSelf({ id: selfId, name: selfName });
     socket.onRoster = (list) => setPeers(list);
+    socket.onRelay = (fromId, data) => assemblers.current.get(fromId)?.feed(data);
 
     socket.onSignal = (fromId, fromName, payload: SignalPayload) => {
       switch (payload.kind) {
@@ -118,12 +129,17 @@ export function useSendHub(wsUrl: string) {
           patchOutgoing(fromId, { status: "rejected" });
           closePeer(fromId);
           break;
+        case "ack":
+          patchOutgoing(fromId, { status: "done" });
+          closePeer(fromId);
+          break;
       }
     };
 
     const connections = peerConnections.current;
     const candidates = pendingCandidates.current;
     const controllers = abortControllers.current;
+    const openAssemblers = assemblers.current;
     return () => {
       socket.close();
       connections.forEach((pc) => pc.close());
@@ -131,6 +147,7 @@ export function useSendHub(wsUrl: string) {
       candidates.clear();
       controllers.forEach((c) => c.abort());
       controllers.clear();
+      openAssemblers.clear();
     };
   }, [wsUrl, closePeer, flushCandidates, patchOutgoing]);
 
@@ -147,12 +164,6 @@ export function useSendHub(wsUrl: string) {
       pc.onicecandidate = (e) => {
         if (e.candidate) socket.sendSignal(peer.id, { kind: "ice", candidate: e.candidate.toJSON() });
       };
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-          patchOutgoing(peer.id, { status: "failed" });
-        }
-      };
-
       const channel = pc.createDataChannel("file");
       setOutgoing((prev) => {
         const next = new Map(prev);
@@ -167,23 +178,24 @@ export function useSendHub(wsUrl: string) {
         return next;
       });
 
-      // The receiver sends "ack" back over this same channel once it's
-      // actually assembled the file — see acceptIncoming. Only then do we
-      // close pc; closing right after the local send loop finishes would
-      // risk dropping whatever's still buffered/in-flight on a real
-      // network (channel.send() only enqueues data, it doesn't confirm
-      // delivery). A zero-latency loopback test never surfaces this race.
-      channel.onmessage = (msg) => {
-        if (msg.data === "ack") {
-          patchOutgoing(peer.id, { status: "done" });
-          closePeer(peer.id);
-        }
-      };
-
-      channel.onopen = () => {
+      // Whichever transport wins the race starts the transfer; the other one
+      // is then a no-op. The receiver acks over signaling once it has actually
+      // assembled the file (see acceptIncoming), and only then is pc closed —
+      // tearing down when the local send loop finishes would drop whatever is
+      // still buffered or in flight on a real network, since send() only
+      // enqueues. A zero-latency loopback test never surfaces that race.
+      //
+      // ponytail: no switchover mid-transfer. A connection that dies halfway
+      // fails the transfer and the user sends again; resuming from an offset
+      // needs the receiver to report what it kept, which is a protocol, not a
+      // fallback.
+      let started = false;
+      const startTransfer = (transport: Transport) => {
+        if (started) return;
+        started = true;
         patchOutgoing(peer.id, { status: "sending" });
-        sendFileOverChannel(
-          channel,
+        sendFileOver(
+          transport,
           file,
           (sentBytes) => patchOutgoing(peer.id, { sentBytes }),
           controller.signal,
@@ -191,10 +203,18 @@ export function useSendHub(wsUrl: string) {
           patchOutgoing(peer.id, { status: "failed" });
           closePeer(peer.id);
         });
-        // No timeout on waiting for the ack above once the local send
-        // loop finishes — large files over a slow link can legitimately
-        // take a long time to actually land. pc.onconnectionstatechange
-        // above still catches a genuinely dead connection.
+      };
+
+      channel.onopen = () => startTransfer(dataChannelTransport(channel));
+
+      pc.onconnectionstatechange = () => {
+        // "failed" only happens after ICE has actually tried, which means the
+        // receiver answered — so this cannot fire while an offer is still
+        // sitting unanswered. Hole punching lost: push the bytes through the
+        // signaling socket instead, which is the one path both peers are
+        // guaranteed to have. "disconnected" is deliberately not handled: it is
+        // routinely transient, and "failed" follows when it is not.
+        if (pc.connectionState === "failed") startTransfer(relayTransport(socket, peer.id));
       };
 
       void pc
@@ -232,7 +252,6 @@ export function useSendHub(wsUrl: string) {
         status: "receiving",
       });
 
-      let incomingChannel: RTCDataChannel | null = null;
       const assembler = new ReceiveAssembler(
         (receivedBytes) =>
           setIncoming((prev) => (prev && prev.fromId === offer.fromId ? { ...prev, receivedBytes } : prev)),
@@ -242,10 +261,11 @@ export function useSendHub(wsUrl: string) {
             prev && prev.fromId === offer.fromId ? { ...prev, status: "done", blobUrl: url } : prev,
           );
           downloadBlob(url, offer.file.name);
-          // Tell the sender over the same channel that it's safe to close
-          // now — only after the file is actually fully assembled here,
-          // not just "all chunks sent". See sendFile's channel.onmessage.
-          incomingChannel?.send("ack");
+          // Tell the sender it is safe to close now — only after the file is
+          // actually fully assembled here, not just "all chunks sent". Over
+          // signaling, not the data channel, because a relayed transfer has no
+          // data channel to answer on. See sendFile's "ack" case.
+          socket.sendSignal(offer.fromId, { kind: "ack" });
           closePeer(offer.fromId);
         },
         () => {
@@ -258,8 +278,10 @@ export function useSendHub(wsUrl: string) {
         },
       );
 
+      // Fed from whichever transport the sender ends up using: its data
+      // channel, or relayed frames arriving on the shared socket.
+      assemblers.current.set(offer.fromId, assembler);
       pc.ondatachannel = (e) => {
-        incomingChannel = e.channel;
         e.channel.onmessage = (msg) => assembler.feed(msg.data);
       };
 

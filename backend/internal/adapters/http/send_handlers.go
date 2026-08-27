@@ -22,6 +22,11 @@ const (
 	// writeWait caps a single write so one stuck client can't block a roster
 	// broadcast (or the ping loop) indefinitely.
 	writeWait = 10 * time.Second
+	// maxMessageSize bounds a single inbound frame: a 256KB relayed file chunk
+	// plus its peer-ID prefix, with room to spare for an SDP blob. The hub is
+	// anonymous by default, so without a limit any visitor could make the
+	// server buffer a frame of whatever size they felt like.
+	maxMessageSize = 512 * 1024
 )
 
 // wsClient adapts a single *websocket.Conn to sendhub.Client. A mutex
@@ -48,13 +53,24 @@ func (c *wsClient) Send(msg sendhub.Message) {
 	}
 }
 
+func (c *wsClient) SendBinary(frame []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+	// No log on failure: this runs once per relayed chunk, so a dead peer would
+	// fill the log with one line per 256KB. The read loop tears the connection
+	// down on its own anyway.
+	_ = c.conn.WriteMessage(websocket.BinaryMessage, frame)
+}
+
 // SendWSHandler upgrades to a WebSocket and joins the anonymous LAN-send
 // signaling hub. Deliberately has no auth: any visitor who can reach this
 // backend can discover and exchange files with any other currently
-// connected visitor — the same trust model as LocalSend on a LAN. The hub
-// only relays signaling (WebRTC offer/answer/ICE candidates); actual file
-// bytes are exchanged directly between browsers over a WebRTC DataChannel
-// and never pass through the server.
+// connected visitor — the same trust model as LocalSend on a LAN. Normally
+// the hub only relays signaling (WebRTC offer/answer/ICE candidates) and the
+// file bytes go browser-to-browser over a WebRTC DataChannel; binary frames
+// are the fallback for peers that cannot reach each other directly, and those
+// do pass through here (see sendhub.Hub.RelayBinary).
 func SendWSHandler(hub *sendhub.Hub, allowedOrigins []string) gin.HandlerFunc {
 	allowed := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
@@ -85,6 +101,7 @@ func SendWSHandler(hub *sendhub.Hub, allowedOrigins []string) gin.HandlerFunc {
 		// pong handler tear it down: every ping we send must be answered
 		// (browsers auto-pong) within pongWait, and any inbound frame also
 		// refreshes the deadline.
+		conn.SetReadLimit(maxMessageSize)
 		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 		conn.SetPongHandler(func(string) error {
 			return conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -121,11 +138,24 @@ func SendWSHandler(hub *sendhub.Hub, allowedOrigins []string) gin.HandlerFunc {
 		hub.BroadcastRoster()
 
 		for {
-			_, data, err := conn.ReadMessage()
+			msgType, data, err := conn.ReadMessage()
 			if err != nil {
 				return
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+
+			// Binary frames are relayed file bytes, not signaling:
+			// [IDLen ASCII destination ID][payload]. Dropped silently when the
+			// destination is gone - this runs once per chunk, and an error reply
+			// per chunk is a flood, not a diagnostic. The sender finds out the
+			// same way it would on a dead WebRTC channel: the transfer stalls.
+			if msgType == websocket.BinaryMessage {
+				if len(data) <= sendhub.IDLen {
+					continue
+				}
+				_ = hub.RelayBinary(id, string(data[:sendhub.IDLen]), data[sendhub.IDLen:])
+				continue
+			}
 
 			var msg sendhub.Message
 			if err := json.Unmarshal(data, &msg); err != nil {

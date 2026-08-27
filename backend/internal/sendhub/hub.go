@@ -3,9 +3,10 @@
 // relay between whoever currently has the /send page open. It deliberately
 // knows nothing about WebRTC — it just tracks who's connected and forwards
 // opaque signaling payloads (SDP offers/answers, ICE candidates) between a
-// sender and a chosen peer. Actual file bytes never pass through here, or
-// through the server at all: the browsers exchange them directly over a
-// WebRTC DataChannel once signaling completes.
+// sender and a chosen peer. File bytes normally never pass through here at
+// all: the browsers exchange them directly over a WebRTC DataChannel once
+// signaling completes. RelayBinary is the fallback for the pairs that cannot
+// get a direct connection up, and it does carry their bytes.
 package sendhub
 
 import (
@@ -49,7 +50,14 @@ type Peer struct {
 // any networking dependency, so it's plain, fast-to-test Go.
 type Client interface {
 	Send(Message)
+	// SendBinary pushes one raw relay frame; see RelayBinary for its layout.
+	SendBinary([]byte)
 }
+
+// IDLen is the length of the hex IDs newID mints. Relay frames carry the peer
+// ID as a fixed-width ASCII prefix instead of a length header, so this has to
+// be a constant both ends agree on (frontend: PEER_ID_LEN in lib/send/socket.ts).
+const IDLen = 32
 
 type Hub struct {
 	mu      sync.Mutex
@@ -129,8 +137,35 @@ func (h *Hub) Relay(fromID string, msg Message) bool {
 	return true
 }
 
+// RelayBinary forwards an opaque chunk of bytes from one peer to another,
+// re-stamping the frame with the SENDER's ID (frame = [IDLen ASCII id][payload])
+// so the receiver knows whose stream it belongs to. What is inside payload is
+// the browsers' business, exactly like a signal's Payload.
+//
+// This is the fallback for two peers whose WebRTC connection never comes up —
+// symmetric NAT, or a firewall that only lets HTTPS out. Those bytes cost this
+// server bandwidth, which is why it is a fallback and not the default path.
+//
+// ponytail: a TURN server is the textbook answer; this reuses the socket both
+// peers already hold open instead of standing up and operating coturn. If relay
+// bandwidth ever becomes the bottleneck, that is the upgrade.
+func (h *Hub) RelayBinary(fromID, toID string, payload []byte) bool {
+	h.mu.Lock()
+	target, ok := h.clients[toID]
+	h.mu.Unlock()
+	if !ok {
+		return false
+	}
+
+	frame := make([]byte, 0, IDLen+len(payload))
+	frame = append(frame, fromID...)
+	frame = append(frame, payload...)
+	target.client.SendBinary(frame)
+	return true
+}
+
 func newID() string {
-	var b [16]byte
+	var b [IDLen / 2]byte
 	_, _ = rand.Read(b[:])
 	return fmt.Sprintf("%x", b)
 }

@@ -245,6 +245,15 @@ BACKUP
                     }
                 }
 
+                stage('Test') {
+                    steps {
+                        // Just the send-relay frame codec (node's own test runner, no
+                        // framework). It guards a constant this file shares with the Go
+                        // hub, where a mismatch misroutes every chunk in silence.
+                        dir('frontend') { sh 'npm run test:send' }
+                    }
+                }
+
                 stage('Build') {
                     steps {
                         // NEXT_PUBLIC_* are baked into the compiled JS at build time, so the
