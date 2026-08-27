@@ -101,6 +101,7 @@ export function FileManager({
   viewerId: string;
 }) {
   const t = useTranslations("Files");
+  const tDetails = useTranslations("FileDetails");
   const format = useFormatter();
   const router = useRouter();
 
@@ -110,7 +111,7 @@ export function FileManager({
   const isOwner = !browse.folder || browse.folder.ownerId === viewerId;
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [detailsFileId, setDetailsFileId] = useState<string | null>(null);
+  const [detailsFile, setDetailsFile] = useState<FileMeta | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -316,6 +317,19 @@ export function FileManager({
 
 
 
+
+  // Fetched here rather than inside the dialog: Base UI only fires
+  // onOpenChange for changes it makes itself, so a dialog opened from this
+  // side would never get a "now load it" signal.
+  async function openDetails(id: string) {
+    try {
+      setDetailsFile(await api.getFile(id));
+    } catch (err) {
+      toast.error(tDetails("loadFailed"), {
+        description: err instanceof ApiError ? err.message : undefined,
+      });
+    }
+  }
 
   async function handleDeleteFile(id: string) {
     try {
@@ -539,7 +553,7 @@ export function FileManager({
                 key={f.id}
                 file={f}
                 isOwner={isOwner}
-                onOpenDetails={() => setDetailsFileId(f.id)}
+                onOpenDetails={() => openDetails(f.id)}
                 onDelete={() => handleDeleteFile(f.id)}
                 onDragStart={
                   isOwner
@@ -555,10 +569,10 @@ export function FileManager({
       )}
 
       <FileDetailsDialog
-        fileId={detailsFileId}
-        open={detailsFileId !== null}
+        file={detailsFile}
+        open={detailsFile !== null}
         onOpenChange={(open) => {
-          if (!open) setDetailsFileId(null);
+          if (!open) setDetailsFile(null);
         }}
       />
 

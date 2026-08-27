@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api, type SharedWithMe } from "@/lib/api";
+import { api, type FileMeta, type SharedWithMe } from "@/lib/api";
 import { FileDetailsDialog } from "../files/file-details-dialog";
 
 function formatSize(bytes: number): string {
@@ -34,7 +34,7 @@ export function SharedWithMeList({ initial }: { initial: SharedWithMe }) {
   const tFiles = useTranslations("Files");
   const format = useFormatter();
   const router = useRouter();
-  const [detailsFileId, setDetailsFileId] = useState<string | null>(null);
+  const [detailsFile, setDetailsFile] = useState<FileMeta | null>(null);
 
   const isEmpty = initial.folders.length === 0 && initial.files.length === 0;
 
@@ -94,7 +94,7 @@ export function SharedWithMeList({ initial }: { initial: SharedWithMe }) {
               <TableRow
                 key={file.id}
                 className="cursor-pointer"
-                onClick={() => setDetailsFileId(file.id)}
+                onClick={() => setDetailsFile(file)}
               >
                 <TableCell className="max-w-xs truncate font-medium" title={file.name}>
                   {file.name || (
@@ -132,10 +132,10 @@ export function SharedWithMeList({ initial }: { initial: SharedWithMe }) {
       )}
 
       <FileDetailsDialog
-        fileId={detailsFileId}
-        open={detailsFileId !== null}
+        file={detailsFile}
+        open={detailsFile !== null}
         onOpenChange={(open) => {
-          if (!open) setDetailsFileId(null);
+          if (!open) setDetailsFile(null);
         }}
       />
     </div>
