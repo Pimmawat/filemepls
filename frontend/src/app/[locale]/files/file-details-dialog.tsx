@@ -54,9 +54,9 @@ export function FileDetailsDialog({
         ) : (
           <>
             {file.mime.startsWith("image/") && (
-              // ponytail: the download URL already streams the bytes with the
-              // right Content-Type; Content-Disposition: attachment only
-              // applies to navigations, not to <img>/<video> subresource loads.
+              // ponytail: the download URL streams the bytes with the right
+              // Content-Type; Content-Disposition: attachment only applies to
+              // navigations, not to <img>/<video> subresource loads.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={api.downloadUrl(file.id)}
